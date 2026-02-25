@@ -1,0 +1,23 @@
+# Red Hat 3scale API Management 2.16 - APIManager CR
+# Set spec.wildcardDomain to your OpenShift apps domain (e.g. apps.cluster-xxx.dynamic.redhatworkshops.io)
+# See: https://docs.redhat.com/en/documentation/red_hat_3scale_api_management/2.16/html-single/installing_red_hat_3scale_api_management/
+apiVersion: apps.3scale.net/v1alpha1
+kind: APIManager
+metadata:
+  name: apimanager
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  wildcardDomain: apps.example.com
+  # Optional: explicit replicas (defaults are fine for lab)
+  # system:
+  #   appSpec:
+  #     replicas: 1
+  #   sidekiqSpec:
+  #     replicas: 1
+  # apicast:
+  #   productionSpec:
+  #     replicas: 1
+  #   stagingSpec:
+  #     replicas: 1

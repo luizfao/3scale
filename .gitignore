@@ -1,0 +1,2 @@
+# Do not commit real repository credentials.
+bootstrap/repo-credentials-secret.yaml

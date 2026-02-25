@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 3scale
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/USER/3scale.git
+    targetRevision: main
+    path: gitops
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: 3scale-gitops
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false

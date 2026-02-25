@@ -1,0 +1,10 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: 3scale-operator
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "-21"
+spec:
+  targetNamespaces:
+    - 3scale-gitops
