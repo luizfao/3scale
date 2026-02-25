@@ -9,7 +9,16 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  wildcardDomain: apps.example.com
+  wildcardDomain: apps.cluster-zrdcz.dynamic.redhatworkshops.io
+  # 2.16 requires external DBs; we provide PostgreSQL and Redis via GitOps (gitops/databases/)
+  externalComponents:
+    backend:
+      redis: true
+    system:
+      database: true
+      redis: true
+    zync:
+      database: true
   # Optional: explicit replicas (defaults are fine for lab)
   # system:
   #   appSpec:

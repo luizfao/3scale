@@ -6,3 +6,12 @@ metadata:
     argocd.argoproj.io/sync-wave: "-3"
   labels:
     app.kubernetes.io/name: 3scale
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: 3scale-databases
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  labels:
+    app.kubernetes.io/name: 3scale-databases
