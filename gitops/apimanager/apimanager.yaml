@@ -7,7 +7,8 @@ metadata:
   name: apimanager
   namespace: 3scale-gitops
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    # APIManager CRD is created by the 3scale operator; use a later wave so operator can be installed (and Install Plan approved) first
+    argocd.argoproj.io/sync-wave: "5"
 spec:
   wildcardDomain: apps.cluster-zrdcz.dynamic.redhatworkshops.io
   # 2.16 requires external DBs; we provide PostgreSQL and Redis via GitOps (gitops/databases/)

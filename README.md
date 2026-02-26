@@ -73,15 +73,19 @@ oc apply -f bootstrap/application.yaml
 
 Isso cria o Application **3scale** no Argo CD, que sincroniza o conteúdo de `gitops/` no namespace `3scale-gitops`.
 
-### 5) Aprovar o Install Plan do operador (Manual)
+### 5) Aprovar o Install Plan do operador (Manual) — obrigatório antes do APIManager
 
-Após o sync, o Subscription do 3scale pode ficar aguardando aprovação. Liste e aprove o Install Plan:
+O CRD `APIManager` só existe depois que o operador 3scale (CSV) está instalado. Com `installPlanApproval: Manual`, é preciso **aprovar o Install Plan** antes que o operador seja instalado. Se o Argo CD mostrar erro *"The Kubernetes API could not find apps.3scale.net/APIManager"*, faça o passo abaixo e depois **sincronize de novo** o Application.
+
+Liste e aprove o Install Plan:
 
 ```bash
 oc -n 3scale-gitops get installplans
-oc -n 3scale-gitops edit installplan <nome-do-installplan>
-# Altere spec.approved para true
-# Ou: oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
+# Aprove o Install Plan (substitua <nome> pelo nome retornado acima):
+oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
+# Aguarde o operador ficar instalado (CSV Succeeded):
+oc -n 3scale-gitops get csv -w
+# Quando o CSV estiver Succeeded, sincronize novamente o Application 3scale no Argo CD
 ```
 
 ### 6) URLs após a implantação
