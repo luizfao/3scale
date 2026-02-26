@@ -20,6 +20,11 @@ spec:
       redis: true
     zync:
       database: true
+  # Ceph RBD does not support RWX; use CephFS for system file storage (Developer Portal / assets).
+  system:
+    fileStorage:
+      persistentVolumeClaim:
+        storageClassName: ocs-external-storagecluster-cephfs
   # Optional: explicit replicas (defaults are fine for lab)
   # system:
   #   appSpec:
