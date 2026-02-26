@@ -63,19 +63,23 @@ Ou use o exemplo em `bootstrap/repo-credentials-secret.example.yaml` (copie para
 
 Edite `bootstrap/application.yaml` e substitua `repoURL: https://github.com/USER/3scale.git` pela URL real do seu repositório.
 
-### 4) Bootstrap do Argo CD
+### 4) Bootstrap do Argo CD (dois Applications, sem editar arquivos)
 
-Aplique o `Application` que aponta para `gitops/`:
+São usados **dois** Applications: um para namespaces, operator, bancos e secrets; outro só para o APIManager (que depende do CRD criado pelo operador). Assim não é preciso alterar nenhum arquivo entre o primeiro e o segundo sync.
+
+Aplique os dois Applications de uma vez:
 
 ```bash
 oc apply -f bootstrap/application.yaml
+oc apply -f bootstrap/application-apimanager.yaml
 ```
 
-Isso cria o Application **3scale** no Argo CD, que sincroniza o conteúdo de `gitops/` no namespace `3scale-gitops`.
+- **Application `3scale`**: sincronize no Argo CD. Cria namespaces `3scale-gitops` e `3scale-databases`, operator (Subscription/OperatorGroup), bancos (PostgreSQL, Redis) e secrets. O APIManager fica de fora (excluído neste Application).
+- **Application `3scale-apimanager`**: pode ficar em estado de falha até o CRD existir. **Não é preciso editá-lo** — depois que o operador estiver instalado (passo 5), basta sincronizar este Application no Argo CD.
 
-### 5) Aprovar o Install Plan do operador (Manual) — obrigatório antes do APIManager
+### 5) Aprovar o Install Plan do operador (Manual) — depois sincronize o Application `3scale-apimanager`
 
-O CRD `APIManager` só existe depois que o operador 3scale (CSV) está instalado. Com `installPlanApproval: Manual`, é preciso **aprovar o Install Plan** antes que o operador seja instalado. Se o Argo CD mostrar erro *"The Kubernetes API could not find apps.3scale.net/APIManager"*, faça o passo abaixo e depois **sincronize de novo** o Application.
+O CRD `APIManager` só existe depois que o operador 3scale (CSV) está instalado. **Depois do sync do Application `3scale`** (namespaces, operator, DBs), aprove o Install Plan. Quando o CSV estiver **Succeeded**, sincronize o Application **`3scale-apimanager`** no Argo CD para aplicar o APIManager (não é preciso alterar nenhum arquivo).
 
 Liste e aprove o Install Plan:
 
@@ -85,7 +89,7 @@ oc -n 3scale-gitops get installplans
 oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
 # Aguarde o operador ficar instalado (CSV Succeeded):
 oc -n 3scale-gitops get csv -w
-# Quando o CSV estiver Succeeded, sincronize novamente o Application 3scale no Argo CD
+# Quando o CSV estiver Succeeded, sincronize o Application 3scale-apimanager no Argo CD
 ```
 
 ### 6) URLs após a implantação
@@ -184,7 +188,8 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 
 | Caminho | Descrição |
 |--------|------------|
-| `bootstrap/application.yaml` | Argo CD Application (monitora `gitops/`) |
+| `bootstrap/application.yaml` | Argo CD Application `3scale` (monitora `gitops/`, exclui `apimanager/`) |
+| `bootstrap/application-apimanager.yaml` | Argo CD Application `3scale-apimanager` (monitora só `gitops/apimanager/`) |
 | `bootstrap/repo-credentials-secret.example.yaml` | Exemplo de Secret para repositório privado |
 | `gitops/namespace.yaml` | Namespaces `3scale-gitops` e `3scale-databases` |
 | `gitops/operator/operatorgroup.yaml` | OperatorGroup (operador no namespace) |

@@ -1,18 +1,18 @@
+# Application que aplica apenas o APIManager CR.
+# Depende do Application "3scale" (namespaces, operator, DBs, secrets) e do operador
+# 3scale estar instalado (Install Plan aprovado, CSV Succeeded). Sincronize este
+# Application somente após o primeiro sync do "3scale" e a aprovação do Install Plan.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: 3scale
+  name: 3scale-apimanager
   namespace: openshift-gitops
 spec:
   project: default
   source:
     repoURL: https://github.com/luizfao/3scale.git
     targetRevision: main
-    path: gitops
-    directory:
-      recurse: true
-      # APIManager é aplicado por um Application separado (application-apimanager.yaml) após o operador estar instalado.
-      exclude: apimanager/*
+    path: gitops/apimanager
   destination:
     server: https://kubernetes.default.svc
     namespace: 3scale-gitops
