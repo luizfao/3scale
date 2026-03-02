@@ -1,89 +1,123 @@
 # Redis for 3scale Backend (queues + storage) - required in 2.16
-# One logical DB for storage (/0), one for queues (/1).
+# GitOps version based on 3scale migration guide for external Redis deployments.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-redis-external
+  namespace: 3scale-databases
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app: backend-redis-external
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-redis-storage-external
+  namespace: 3scale-databases
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app: backend-redis-external
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  volumeMode: Filesystem
+---
 apiVersion: v1
 kind: Service
 metadata:
+  # Kept as backend-redis to preserve existing secret URLs in 3scale-gitops
   name: backend-redis
   namespace: 3scale-databases
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
   labels:
-    app.kubernetes.io/name: backend-redis
+    app: backend-redis-external
 spec:
-  selector:
-    app.kubernetes.io/name: backend-redis
   type: ClusterIP
   ports:
-    - name: redis
-      port: 6379
-      targetPort: redis
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    deployment: backend-redis-external
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: backend-redis
+  name: backend-redis-external
   namespace: 3scale-databases
   annotations:
     argocd.argoproj.io/sync-wave: "0"
   labels:
-    app.kubernetes.io/name: backend-redis
+    app: backend-redis-external
 spec:
   replicas: 1
-  serviceName: backend-redis
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: backend-redis
+      deployment: backend-redis-external
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: backend-redis
+        deployment: backend-redis-external
     spec:
+      serviceAccountName: backend-redis-external
       terminationGracePeriodSeconds: 30
       containers:
-        - name: redis
-          image: registry.redhat.io/rhel9/redis-7:latest
+        - name: backend-redis-external
+          image: registry.redhat.io/rhel9/redis-7
           imagePullPolicy: IfNotPresent
+          env:
+            - name: REDIS_CONF
+              value: /etc/redis.d/redis.conf
           ports:
-            - name: redis
-              containerPort: 6379
-          volumeMounts:
-            - name: data
-              mountPath: /data
+            - containerPort: 6379
+              protocol: TCP
           readinessProbe:
             exec:
               command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 12
+                - container-entrypoint
+                - bash
+                - -c
+                - redis-cli set liveness-probe "`date`" | grep OK
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
           livenessProbe:
-            exec:
-              command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 15
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
             periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 6
+            successThreshold: 1
+            failureThreshold: 3
           resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
             limits:
-              cpu: "1"
-              memory: 512Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            seccompProfile:
-              type: RuntimeDefault
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 1Gi
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: "250m"
+              memory: 256Mi
+          volumeMounts:
+            - name: backend-redis-storage-external
+              mountPath: /var/lib/redis/data
+            - name: redis-config-external
+              mountPath: /etc/redis.d/
+      volumes:
+        - name: backend-redis-storage-external
+          persistentVolumeClaim:
+            claimName: backend-redis-storage-external
+        - name: redis-config-external
+          configMap:
+            name: redis-config-external
+            items:
+              - key: redis.conf
+                path: redis.conf

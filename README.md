@@ -196,6 +196,7 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 | `gitops/operator/operatorgroup.yaml` | OperatorGroup (operador no namespace) |
 | `gitops/operator/subscription.yaml` | Subscription 3scale Operator 2.16 (Manual) |
 | `gitops/databases/postgresql-system/postgresql.yaml` | PostgreSQL para System (`system_production`) em `3scale-databases` |
+| `gitops/databases/redis-common/redis-config.yaml` | ConfigMap `redis-config-external` (alinhado ao guia de migração do 3scale) |
 | `gitops/databases/redis-system/redis.yaml` | Redis para System (Sidekiq) em `3scale-databases` |
 | `gitops/databases/redis-backend/redis.yaml` | Redis para Backend (storage + queues) em `3scale-databases` |
 | `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
@@ -206,6 +207,6 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 - **2.16 e bancos externos**: a partir do 2.16, system database, system Redis e backend Redis são obrigatórios como componentes externos. Este repositório instala PostgreSQL (system) e Redis (system + backend) no namespace **`3scale-databases`** via GitOps; os secrets em `3scale-gitops` referenciam os serviços por FQDN (`*.3scale-databases.svc.cluster.local`). O APIManager usa `externalComponents` para referenciar esses secrets.
 - **Zync database**: mantido em modo interno (gerenciado automaticamente pelo operador), conforme [suportado no 3scale 2.16](https://access.redhat.com/articles/2798521).
 - **Senhas**: os secrets em `gitops/databases/` usam placeholders (`change-me`). Mantenha o `system-database` consistente com o secret `postgresql-system`.
-- **Persistent volumes**: os StatefulSets de PostgreSQL e Redis usam PVCs RWO; o operador 3scale continua responsável por volumes RWX do portal quando em modo externo.
+- **Persistent volumes**: PostgreSQL usa StatefulSet+PVC RWO; Redis externo segue o padrão do guia de migração do 3scale (Deployment + PVC + ConfigMap `redis-config-external`).
 - **Canal do operador**: `threescale-2.16`. Confirme no OperatorHub do cluster o nome do pacote e do canal se houver diferença.
 - **Repositório Keycloak**: para implantar ou ajustar o RHBK usado no SSO (Admin, Developer Portal e APIs), use o repositório [keycloak](https://github.com/luizfao/keycloak) e o namespace `rhbk-gitops`.

@@ -1,88 +1,123 @@
 # Redis for 3scale System component (Sidekiq, etc.) - required in 2.16
+# GitOps version based on 3scale migration guide for external Redis deployments.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: system-redis-external
+  namespace: 3scale-databases
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app: system-redis-external
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: system-redis-storage-external
+  namespace: 3scale-databases
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app: system-redis-external
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  volumeMode: Filesystem
+---
 apiVersion: v1
 kind: Service
 metadata:
+  # Kept as system-redis to preserve existing secret URL in 3scale-gitops
   name: system-redis
   namespace: 3scale-databases
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
   labels:
-    app.kubernetes.io/name: system-redis
+    app: system-redis-external
 spec:
-  selector:
-    app.kubernetes.io/name: system-redis
   type: ClusterIP
   ports:
-    - name: redis
-      port: 6379
-      targetPort: redis
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    deployment: system-redis-external
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: system-redis
+  name: system-redis-external
   namespace: 3scale-databases
   annotations:
     argocd.argoproj.io/sync-wave: "0"
   labels:
-    app.kubernetes.io/name: system-redis
+    app: system-redis-external
 spec:
   replicas: 1
-  serviceName: system-redis
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: system-redis
+      deployment: system-redis-external
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: system-redis
+        deployment: system-redis-external
     spec:
+      serviceAccountName: system-redis-external
       terminationGracePeriodSeconds: 30
       containers:
-        - name: redis
-          image: registry.redhat.io/rhel9/redis-7:latest
+        - name: system-redis-external
+          image: registry.redhat.io/rhel9/redis-7
           imagePullPolicy: IfNotPresent
+          env:
+            - name: REDIS_CONF
+              value: /etc/redis.d/redis.conf
           ports:
-            - name: redis
-              containerPort: 6379
-          volumeMounts:
-            - name: data
-              mountPath: /data
+            - containerPort: 6379
+              protocol: TCP
           readinessProbe:
             exec:
               command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 12
+                - container-entrypoint
+                - bash
+                - -c
+                - redis-cli set liveness-probe "`date`" | grep OK
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
           livenessProbe:
-            exec:
-              command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 15
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
             periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 6
+            successThreshold: 1
+            failureThreshold: 3
           resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
             limits:
-              cpu: "1"
-              memory: 512Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            seccompProfile:
-              type: RuntimeDefault
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 1Gi
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: "250m"
+              memory: 256Mi
+          volumeMounts:
+            - name: system-redis-storage-external
+              mountPath: /var/lib/redis/data
+            - name: redis-config-external
+              mountPath: /etc/redis.d/
+      volumes:
+        - name: system-redis-storage-external
+          persistentVolumeClaim:
+            claimName: system-redis-storage-external
+        - name: redis-config-external
+          configMap:
+            name: redis-config-external
+            items:
+              - key: redis.conf
+                path: redis.conf
