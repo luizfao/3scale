@@ -8,8 +8,9 @@ Documentação do produto: [Red Hat 3scale API Management 2.16](https://docs.red
 
 - **Namespace**: `3scale-gitops`
 - **Bancos externos (obrigatórios no 2.16)** no namespace **`3scale-databases`**, via GitOps:
-  - **PostgreSQL** para System (`system_production`) e para Zync (`zync_production`)
+  - **PostgreSQL** para System (`system_production`)
   - **Redis** para System (Sidekiq) e para Backend (storage + queues, DBs lógicos 0 e 1)
+- **Zync database** em modo interno (gerenciado pelo operador), conforme suporte do 3scale 2.16
 - **3scale Operator** (OLM) no canal `threescale-2.16`, aprovação de Install Plan **Manual**
 - **APIManager** CR com `externalComponents` apontando para esses bancos
 
@@ -74,7 +75,7 @@ oc apply -f bootstrap/application.yaml
 oc apply -f bootstrap/application-apimanager.yaml
 ```
 
-- **Application `3scale`**: sincronize no Argo CD. Cria namespaces `3scale-gitops` e `3scale-databases`, operator (Subscription/OperatorGroup), bancos (PostgreSQL, Redis) e secrets. O APIManager fica de fora (excluído neste Application).
+- **Application `3scale`**: sincronize no Argo CD. Cria namespaces `3scale-gitops` e `3scale-databases`, operator (Subscription/OperatorGroup), bancos externos (PostgreSQL System + Redis) e secrets. O APIManager fica de fora (excluído neste Application).
 - **Application `3scale-apimanager`**: pode ficar em estado de falha até o CRD existir. **Não é preciso editá-lo** — depois que o operador estiver instalado (passo 5), basta sincronizar este Application no Argo CD.
 
 ### 5) Aprovar o Install Plan do operador (Manual) — depois sincronize o Application `3scale-apimanager`
@@ -195,16 +196,16 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 | `gitops/operator/operatorgroup.yaml` | OperatorGroup (operador no namespace) |
 | `gitops/operator/subscription.yaml` | Subscription 3scale Operator 2.16 (Manual) |
 | `gitops/databases/postgresql-system/postgresql.yaml` | PostgreSQL para System (`system_production`) em `3scale-databases` |
-| `gitops/databases/postgresql-zync/postgresql.yaml` | PostgreSQL para Zync (`zync_production`) em `3scale-databases` |
 | `gitops/databases/redis-system/redis.yaml` | Redis para System (Sidekiq) em `3scale-databases` |
 | `gitops/databases/redis-backend/redis.yaml` | Redis para Backend (storage + queues) em `3scale-databases` |
-| `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis`, `zync` para o operador |
+| `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
 | `gitops/apimanager/apimanager.yaml` | APIManager CR (`wildcardDomain` + `externalComponents`) |
 
 ## Observações
 
-- **2.16 e bancos externos**: a partir do 2.16, system database, system Redis e backend Redis são obrigatórios como componentes externos. Este repositório instala PostgreSQL (system + zync) e Redis (system + backend) no namespace **`3scale-databases`** via GitOps; os secrets em `3scale-gitops` referenciam os serviços por FQDN (`*.3scale-databases.svc.cluster.local`). O APIManager usa `externalComponents` para referenciar esses secrets.
-- **Senhas**: os secrets em `gitops/databases/` usam placeholders (`change-me`). Mantenha as senhas do `system-database` e `zync` iguais às dos secrets `postgresql-system` e `postgresql-zync`, ou altere em conjunto.
+- **2.16 e bancos externos**: a partir do 2.16, system database, system Redis e backend Redis são obrigatórios como componentes externos. Este repositório instala PostgreSQL (system) e Redis (system + backend) no namespace **`3scale-databases`** via GitOps; os secrets em `3scale-gitops` referenciam os serviços por FQDN (`*.3scale-databases.svc.cluster.local`). O APIManager usa `externalComponents` para referenciar esses secrets.
+- **Zync database**: mantido em modo interno (gerenciado automaticamente pelo operador), conforme [suportado no 3scale 2.16](https://access.redhat.com/articles/2798521).
+- **Senhas**: os secrets em `gitops/databases/` usam placeholders (`change-me`). Mantenha o `system-database` consistente com o secret `postgresql-system`.
 - **Persistent volumes**: os StatefulSets de PostgreSQL e Redis usam PVCs RWO; o operador 3scale continua responsável por volumes RWX do portal quando em modo externo.
 - **Canal do operador**: `threescale-2.16`. Confirme no OperatorHub do cluster o nome do pacote e do canal se houver diferença.
 - **Repositório Keycloak**: para implantar ou ajustar o RHBK usado no SSO (Admin, Developer Portal e APIs), use o repositório [keycloak](https://github.com/luizfao/keycloak) e o namespace `rhbk-gitops`.

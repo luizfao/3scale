@@ -11,15 +11,16 @@ metadata:
     argocd.argoproj.io/sync-wave: "5"
 spec:
   wildcardDomain: apps.cluster-zrdcz.dynamic.redhatworkshops.io
-  # 2.16 requires external DBs; we provide PostgreSQL and Redis via GitOps (gitops/databases/)
+  # 2.16 requires external System DB + Redis; Zync DB is kept internal (operator-managed).
   externalComponents:
     backend:
       redis: true
     system:
       database: true
       redis: true
-    zync:
-      database: true
+    # Zync database can be internal
+    # zync:
+    #   database: true
   # Ceph RBD does not support RWX; use CephFS for system file storage (Developer Portal / assets).
   system:
     fileStorage:
