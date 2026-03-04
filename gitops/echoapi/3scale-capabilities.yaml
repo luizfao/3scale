@@ -36,6 +36,11 @@ spec:
   backendUsages:
     echoapi_backend:
       path: /
+  mappingRules:
+    - httpMethod: GET
+      pattern: /
+      increment: 1
+      metricMethodRef: hits
   applicationPlans:
     basic:
       name: Basic
