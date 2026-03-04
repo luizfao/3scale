@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: echoapi
-  namespace: 3scale-gitops
+  namespace: echoapi-gitops
   annotations:
     argocd.argoproj.io/sync-wave: "1"
   labels:
@@ -23,19 +23,14 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 8080
-          env:
-            - name: HTTP_PORT
-              value: "8080"
+              containerPort: 9292
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -51,7 +46,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: echoapi
-  namespace: 3scale-gitops
+  namespace: echoapi-gitops
   annotations:
     argocd.argoproj.io/sync-wave: "1"
   labels:
@@ -62,5 +57,5 @@ spec:
     app.kubernetes.io/name: echoapi
   ports:
     - name: http
-      port: 8080
+      port: 9292
       targetPort: http

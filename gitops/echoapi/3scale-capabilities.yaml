@@ -19,7 +19,7 @@ metadata:
 spec:
   name: Echo API Backend
   systemName: echoapi_backend
-  privateBaseURL: http://echoapi.3scale-gitops.svc.cluster.local:8080
+  privateBaseURL: http://echoapi.echoapi-gitops.svc.cluster.local:9292
 ---
 apiVersion: capabilities.3scale.net/v1beta1
 kind: Product

@@ -10,6 +10,8 @@ oc apply -f bootstrap/application-echoapi.yaml
 
 No Argo CD, sincronize o app `3scale-echoapi`.
 
+O upstream `echoapi` roda no namespace `echoapi-gitops`.
+
 ## 2) Aguardar sincronizacao dos CRs de capabilities
 
 ```bash
