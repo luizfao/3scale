@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: echoapi-developer-password
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+type: Opaque
+stringData:
+  password: change-me
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Backend
+metadata:
+  name: echoapi-backend
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  name: Echo API Backend
+  systemName: echoapi_backend
+  privateBaseURL: http://echoapi.3scale-gitops.svc.cluster.local:8080
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Product
+metadata:
+  name: echoapi-product
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  name: Echo API
+  systemName: echoapi
+  deployment:
+    apicastHosted: {}
+  backendUsages:
+    echoapi_backend:
+      path: /
+  applicationPlans:
+    basic:
+      name: Basic
+  policies:
+    - name: apicast
+      version: builtin
+      enabled: true
+      configuration: {}
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: DeveloperAccount
+metadata:
+  name: echoapi-account
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  orgName: Echo API Org
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: DeveloperUser
+metadata:
+  name: echoapi-developer
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  username: echoapi-user
+  email: echoapi-user@example.org
+  passwordCredentialsRef:
+    name: echoapi-developer-password
+    namespace: 3scale-gitops
+  role: admin
+  developerAccountRef:
+    name: echoapi-account
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Application
+metadata:
+  name: echoapi-application
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  name: Echo API App
+  description: Echo API test application
+  accountCR:
+    name: echoapi-account
+  productCR:
+    name: echoapi-product
+  applicationPlanName: basic
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: ApplicationAuth
+metadata:
+  name: echoapi-application-auth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  applicationCRName: echoapi-application
+  authSecretRef:
+    name: echoapi-app-auth
+  generateSecret: true

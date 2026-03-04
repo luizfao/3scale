@@ -73,6 +73,7 @@ Aplique os dois Applications de uma vez:
 ```bash
 oc apply -f bootstrap/application.yaml
 oc apply -f bootstrap/application-apimanager.yaml
+oc apply -f bootstrap/application-echoapi.yaml
 ```
 
 - **Application `3scale`**: sincronize no Argo CD. Cria namespaces `3scale-gitops` e `3scale-databases`, operator (Subscription/OperatorGroup), bancos externos (PostgreSQL System + Redis) e secrets. O APIManager fica de fora (excluído neste Application).
@@ -189,8 +190,9 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 
 | Caminho | Descrição |
 |--------|------------|
-| `bootstrap/application.yaml` | Argo CD Application `3scale` (monitora `gitops/`, exclui `apimanager/`) |
+| `bootstrap/application.yaml` | Argo CD Application `3scale` (monitora `gitops/`, exclui `apimanager/` e `echoapi/`) |
 | `bootstrap/application-apimanager.yaml` | Argo CD Application `3scale-apimanager` (monitora só `gitops/apimanager/`) |
+| `bootstrap/application-echoapi.yaml` | Argo CD Application `3scale-echoapi` (monitora só `gitops/echoapi/`) |
 | `bootstrap/repo-credentials-secret.example.yaml` | Exemplo de Secret para repositório privado |
 | `gitops/namespace.yaml` | Namespaces `3scale-gitops` e `3scale-databases` |
 | `gitops/operator/operatorgroup.yaml` | OperatorGroup (operador no namespace) |
@@ -201,6 +203,9 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 | `gitops/databases/redis-backend/redis.yaml` | Redis para Backend (storage + queues) em `3scale-databases` |
 | `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
 | `gitops/apimanager/apimanager.yaml` | APIManager CR (`wildcardDomain` + `externalComponents`) |
+| `gitops/echoapi/echo-server.yaml` | Deploy do backend `echoapi` interno (ClusterIP) |
+| `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product`, `DeveloperAccount`, `DeveloperUser`, `Application`, `ApplicationAuth` |
+| `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API |
 
 ## Observações
 
