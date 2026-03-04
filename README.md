@@ -215,3 +215,9 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 - **Persistent volumes**: PostgreSQL usa StatefulSet+PVC RWO; Redis externo segue o padrão do guia de migração do 3scale (Deployment + PVC + ConfigMap `redis-config-external`) com `storageClassName: ocs-external-storagecluster-cephfs`.
 - **Canal do operador**: `threescale-2.16`. Confirme no OperatorHub do cluster o nome do pacote e do canal se houver diferença.
 - **Repositório Keycloak**: para implantar ou ajustar o RHBK usado no SSO (Admin, Developer Portal e APIs), use o repositório [keycloak](https://github.com/luizfao/keycloak) e o namespace `rhbk-gitops`.
+
+## Melhorias
+
+- Adicionar resumo na introdução, detalhes e link para o `ECHOAPI_MANUAL_STEPS.md` nos passos de execução para deixar claro o papel do echoapi;
+- Separar a instação do operador das bases para dividir as responsabilidades, facilitar a instalação e o entendimento;
+- Adicionar passos de "fork" para utilização e `contributing.md` para melhorias;
