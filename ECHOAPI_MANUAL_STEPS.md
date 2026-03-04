@@ -52,13 +52,22 @@ spec:
 EOF
 ```
 
-## 4) Obter credenciais da aplicacao
+## 4) Criar credenciais da aplicacao (manual)
 
-O CR `ApplicationAuth` gera o secret `echoapi-app-auth-v2`.
-Liste todas as chaves/valores decodificados:
+Para evitar erro de limite de chaves (`ApplicationKey limit reached`), o `ApplicationAuth` nao e reconciliado via GitOps.
+Crie/obtenha as credenciais da app no Admin Portal:
+
+- Audience -> Accounts -> `Echo API Org` -> Applications -> `Echo API App v2`
+- Em Credentials, copie um dos formatos disponiveis:
+  - `user_key`
+  - ou `app_id` + `app_key`
+
+Opcional: salve as credenciais em Secret no cluster:
 
 ```bash
-oc -n 3scale-gitops get secret echoapi-app-auth-v2 -o go-template='{{range $k,$v := .data}}{{printf "%s=%s\n" $k ($v|base64decode)}}{{end}}'
+oc -n 3scale-gitops create secret generic echoapi-app-auth-v2 \
+  --from-literal=user_key='<USER_KEY>' \
+  --dry-run=client -o yaml | oc apply -f -
 ```
 
 ## 5) Descobrir endpoint publico e testar chamada externa
