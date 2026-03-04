@@ -12,7 +12,7 @@ stringData:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: echoapi-app-auth
+  name: echoapi-app-auth-v2
   namespace: 3scale-gitops
   annotations:
     argocd.argoproj.io/sync-wave: "2"
@@ -85,12 +85,12 @@ spec:
 apiVersion: capabilities.3scale.net/v1beta1
 kind: Application
 metadata:
-  name: echoapi-application
+  name: echoapi-application-v2
   namespace: 3scale-gitops
   annotations:
     argocd.argoproj.io/sync-wave: "6"
 spec:
-  name: Echo API App
+  name: Echo API App v2
   description: Echo API test application
   accountCR:
     name: echoapi-account
@@ -101,12 +101,12 @@ spec:
 apiVersion: capabilities.3scale.net/v1beta1
 kind: ApplicationAuth
 metadata:
-  name: echoapi-application-auth
+  name: echoapi-application-auth-v2
   namespace: 3scale-gitops
   annotations:
     argocd.argoproj.io/sync-wave: "7"
 spec:
-  applicationCRName: echoapi-application
+  applicationCRName: echoapi-application-v2
   authSecretRef:
-    name: echoapi-app-auth
+    name: echoapi-app-auth-v2
   generateSecret: true

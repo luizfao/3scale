@@ -18,7 +18,7 @@ O upstream `echoapi` roda no namespace `echoapi-gitops`.
 oc -n 3scale-gitops wait --for=condition=Synced --timeout=300s backend/echoapi-backend
 oc -n 3scale-gitops wait --for=condition=Synced --timeout=300s product/echoapi-product
 oc -n 3scale-gitops wait --for=condition=Ready --timeout=300s developeraccount/echoapi-account
-oc -n 3scale-gitops wait --for=condition=Synced --timeout=300s application/echoapi-application
+oc -n 3scale-gitops wait --for=condition=Ready --timeout=300s application.capabilities.3scale.net/echoapi-application
 ```
 
 ## 3) Promover proxy config (staging e production)
@@ -54,11 +54,11 @@ EOF
 
 ## 4) Obter credenciais da aplicacao
 
-O CR `ApplicationAuth` gera o secret `echoapi-app-auth`.
+O CR `ApplicationAuth` gera o secret `echoapi-app-auth-v2`.
 Liste todas as chaves/valores decodificados:
 
 ```bash
-oc -n 3scale-gitops get secret echoapi-app-auth -o go-template='{{range $k,$v := .data}}{{printf "%s=%s\n" $k ($v|base64decode)}}{{end}}'
+oc -n 3scale-gitops get secret echoapi-app-auth-v2 -o go-template='{{range $k,$v := .data}}{{printf "%s=%s\n" $k ($v|base64decode)}}{{end}}'
 ```
 
 ## 5) Descobrir endpoint publico e testar chamada externa

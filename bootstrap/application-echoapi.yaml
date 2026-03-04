@@ -5,6 +5,13 @@ metadata:
   namespace: openshift-gitops
 spec:
   project: default
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: echoapi-app-auth-v2
+      namespace: 3scale-gitops
+      jsonPointers:
+        - /data
   source:
     repoURL: https://github.com/luizfao/3scale.git
     targetRevision: main
