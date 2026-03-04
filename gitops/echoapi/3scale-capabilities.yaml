@@ -9,6 +9,16 @@ type: Opaque
 stringData:
   password: change-me
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: echoapi-app-auth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+type: Opaque
+stringData: {}
+---
 apiVersion: capabilities.3scale.net/v1beta1
 kind: Backend
 metadata:
