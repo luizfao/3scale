@@ -18,7 +18,7 @@ O upstream `echoapi` roda no namespace `echoapi-gitops`.
 oc -n 3scale-gitops wait --for=condition=Synced --timeout=300s backend/echoapi-backend
 oc -n 3scale-gitops wait --for=condition=Synced --timeout=300s product/echoapi-product
 oc -n 3scale-gitops wait --for=condition=Ready --timeout=300s developeraccount/echoapi-account
-oc -n 3scale-gitops wait --for=condition=Ready --timeout=300s application.capabilities.3scale.net/echoapi-application
+oc -n 3scale-gitops wait --for=condition=Ready --timeout=300s application.capabilities.3scale.net/echoapi-application-v2
 ```
 
 ## 3) Promover proxy config (staging e production)
@@ -52,13 +52,22 @@ spec:
 EOF
 ```
 
-## 4) Obter credenciais da aplicacao
+## 4) Criar credenciais da aplicacao (manual)
 
-O CR `ApplicationAuth` gera o secret `echoapi-app-auth-v2`.
-Liste todas as chaves/valores decodificados:
+Para evitar o erro de limite de chaves (`ApplicationKey limit reached`), o recurso `ApplicationAuth` nao e gerenciado por GitOps.
+Crie/obtenha as credenciais da app diretamente no Admin Portal:
+
+- Audience -> Accounts -> `Echo API Org` -> Applications -> `Echo API App v2`
+- Em Credentials, copie um dos formatos disponiveis:
+  - `user_key`
+  - ou `app_id` + `app_key`
+
+Opcional: armazenar a credencial no cluster para uso em scripts:
 
 ```bash
-oc -n 3scale-gitops get secret echoapi-app-auth-v2 -o go-template='{{range $k,$v := .data}}{{printf "%s=%s\n" $k ($v|base64decode)}}{{end}}'
+oc -n 3scale-gitops create secret generic echoapi-app-auth-v2 \
+  --from-literal=user_key='<USER_KEY>' \
+  --dry-run=client -o yaml | oc apply -f -
 ```
 
 ## 5) Descobrir endpoint publico e testar chamada externa
