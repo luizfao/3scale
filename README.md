@@ -131,6 +131,8 @@ O 3scale usa o **Red Hat Build of Keycloak (RHBK)** já implantado no namespace 
 
 **Pré-requisito:** Keycloak (RHBK) rodando em `rhbk-gitops` com um realm (ex.: `rhbk`) e a URL do realm acessível (ex.: `https://rhbk-rhbk-gitops.<cluster-domain>/realms/rhbk`).
 
+**Importante (LDAP):** para usuários federados via LDAP (ex.: `ldaptest`) autenticarem corretamente no 3scale por SSO, o usuário precisa estar com **Email verified = true** no Keycloak. Em GitOps, o caminho recomendado é configurar `trustEmail=true` no provider LDAP do realm para evitar ajuste manual por usuário.
+
 ---
 
 ### 1) SSO para Admin Portal (membros e administradores)
@@ -161,7 +163,7 @@ Permite que desenvolvedores que acessam o Developer Portal façam login via Keyc
 - **No Keycloak:** use o mesmo realm (ou outro) e crie um client para o Developer Portal, com redirect URIs apontando para o Developer Portal do 3scale.
 
 - **No 3scale Admin Portal:**
-  - **Audience** → **Developer Portal** → **SSO Integrations**.
+  - **Audience** → **Developer Portal** → **Settings** → **SSO Integrations**.
   - Crie uma integração SSO informando o **Realm/Site** do Keycloak, **Client ID** e **Client Secret**, e configure a **Callback URL** no client do Keycloak conforme indicado pelo 3scale.
 
 Referência: [Creating the Developer Portal – Authentication](https://docs.redhat.com/en/documentation/red_hat_3scale_api_management/2.15/html/creating_the_developer_portal/authentication).
