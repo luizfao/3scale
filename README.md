@@ -206,7 +206,7 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 | `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
 | `gitops/apimanager/apimanager.yaml` | APIManager CR (`wildcardDomain` + `externalComponents`) |
 | `gitops/echoapi/echo-server.yaml` | Deploy do backend `echoapi` interno (ClusterIP) |
-| `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product`, `DeveloperAccount`, `DeveloperUser`, `Application`, `ApplicationAuth` |
+| `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product`, `DeveloperAccount`, `DeveloperUser`, `Application` |
 | `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API |
 
 ## Observações
