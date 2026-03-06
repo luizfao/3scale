@@ -29,6 +29,7 @@ de introspecção de tokens.
    - **Name**: `3scale Zync OIDC Integration`
 4. Clique em **Next**
 5. Na tela **Capability config**:
+   - Habilite **Client authentication**
    - Desabilite **Standard flow**
    - Desabilite **Direct access grants**
    - Habilite **Service accounts roles**
@@ -37,7 +38,7 @@ de introspecção de tokens.
    - Copie o **Client secret** gerado (ou clique em **Regenerate** para obter um novo)
    - Anote este valor — será usado no próximo passo
 
-### Via kcadm (alternativa CLI)
+### (Ainda não testado) Via kcadm (alternativa CLI)
 
 ```bash
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
@@ -88,7 +89,7 @@ clients OIDC no Keycloak automaticamente.
    - `view-clients`
 5. Clique em **Assign**
 
-### Via kcadm (alternativa CLI)
+### (Ainda não testado) Via kcadm (alternativa CLI)
 
 ```bash
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"

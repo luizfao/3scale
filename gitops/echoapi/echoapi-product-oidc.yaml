@@ -6,7 +6,7 @@
 #   - APIcast can call the token introspection endpoint (use_3scale_oidc_issuer_endpoint)
 #
 # IMPORTANT: Replace 'change-me-zync-secret' with the actual client secret set in
-# keycloak/gitops/rhbk/realm-import/realm.yaml before syncing this product.
+# Keycloak > Clients > 3scale-zync > Credentials before syncing this product.
 # After syncing, follow ECHOAPI_OIDC_MANUAL_STEPS.md to:
 #   1. Assign manage-clients role to the 3scale-zync service account in Keycloak
 #   2. Promote the proxy configuration
@@ -28,8 +28,9 @@ spec:
         oidc:
           issuerType: "keycloak"
           # Format: https://CLIENT_ID:CLIENT_SECRET@KEYCLOAK_HOST/realms/REALM
-          # Update 'change-me-zync-secret' to match the secret in realm.yaml
-          issuerEndpoint: "https://3scale-zync:change-me-zync-secret@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
+          # Update 'change-me-zync-secret' to match the secret in Keycloak > Clients > 3scale-zync > Credentials
+          # issuerEndpoint: "https://3scale-zync:change-me-zync-secret@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
+          issuerEndpoint: "https://3scale-zync:QA70oZxWHPjlVIsNWEgf38z9xUtp50bt@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
           authenticationFlow:
             standardFlowEnabled: false
             implicitFlowEnabled: false
