@@ -1,54 +1,94 @@
 # Echo API OIDC — passos manuais
 
 Este arquivo descreve os passos necessários para colocar o produto `Echo API OIDC`
-em funcionamento. A maior parte é gerenciada via GitOps (`gitops/echoapi/echoapi-product-oidc.yaml`),
-mas algumas etapas exigem interação direta com o Keycloak e o 3scale Admin Portal.
+em funcionamento. O produto em si é gerenciado via GitOps (`gitops/echoapi/echoapi-product-oidc.yaml`),
+mas as etapas de infraestrutura no Keycloak são feitas manualmente para evitar
+conflitos com clients já existentes no realm.
 
 ## Pré-requisitos
 
-- Argo CD Application `3scale-echoapi` sincronizado (inclui `echoapi-product-oidc.yaml`)
-- Keycloak (`rhbk`) sincronizado com o cliente `3scale-zync` criado
 - Cluster acessível via `oc login`
+- Acesso ao Admin Portal do Keycloak em `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/rhbk/console/`
+- Argo CD Application `3scale-echoapi` ainda **não** sincronizado com este produto (faça o sync após o passo 2)
 
 ---
 
-## 1) Definir o secret do cliente 3scale-zync no Keycloak
+## 1) Criar o cliente 3scale-zync no Keycloak (manual)
 
-O cliente `3scale-zync` é criado via GitOps no realm `rhbk` com o secret
-`change-me-zync-secret`. Antes de sincronizar, defina um valor seguro:
-
-1. Abra o arquivo `keycloak/gitops/rhbk/realm-import/realm.yaml`
-2. Substitua `change-me-zync-secret` por um valor gerado:
-   ```bash
-   openssl rand -hex 20
-   ```
-3. Atualize também `gitops/echoapi/echoapi-product-oidc.yaml` → campo `issuerEndpoint`,
-   substituindo `change-me-zync-secret` pelo mesmo valor.
-4. Faça commit, push e sincronize os dois Argo CD Applications:
-   - **keycloak** (para criar o client no Keycloak)
-   - **3scale-echoapi** (para criar o produto no 3scale)
-
----
-
-## 2) Atribuir roles ao service account do 3scale-zync no Keycloak
-
-Após o Keycloak sincronizar e o cliente `3scale-zync` ser criado, é necessário
-atribuir as roles de gerenciamento de clientes ao service account dele. Isso permite
-que o Zync registre/atualize automaticamente os clientes OIDC criados pelos Applications
-do 3scale.
+O cliente `3scale-zync` é usado pelo Zync (componente do 3scale) para registrar
+automaticamente clientes OIDC no Keycloak, e pelo APIcast para chamar o endpoint
+de introspecção de tokens.
 
 ### Via Admin Portal do Keycloak
 
 1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/rhbk/console/`
-2. Vá em **Clients** → `3scale-zync` → aba **Service accounts roles**
-3. Clique em **Assign role**
-4. No filtro, selecione **Filter by clients** e escolha `realm-management`
-5. Selecione as roles:
+2. Vá em **Clients** → **Create client**
+3. Preencha:
+   - **Client type**: `OpenID Connect`
+   - **Client ID**: `3scale-zync`
+   - **Name**: `3scale Zync OIDC Integration`
+4. Clique em **Next**
+5. Na tela **Capability config**:
+   - Desabilite **Standard flow**
+   - Desabilite **Direct access grants**
+   - Habilite **Service accounts roles**
+6. Clique em **Next** → **Save**
+7. Na aba **Credentials**:
+   - Copie o **Client secret** gerado (ou clique em **Regenerate** para obter um novo)
+   - Anote este valor — será usado no próximo passo
+
+### Via kcadm (alternativa CLI)
+
+```bash
+KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+REALM="rhbk"
+ADMIN_PASS="$(oc -n rhbk-gitops get secret rhbk-initial-admin -o jsonpath='{.data.password}' | base64 -d)"
+
+oc exec -n rhbk-gitops deployment/rhbk -- \
+  /opt/keycloak/bin/kcadm.sh config credentials \
+    --server "${KEYCLOAK_URL}" --realm master \
+    --user admin --password "${ADMIN_PASS}"
+
+oc exec -n rhbk-gitops deployment/rhbk -- \
+  /opt/keycloak/bin/kcadm.sh create clients -r "${REALM}" \
+    -s clientId=3scale-zync \
+    -s name="3scale Zync OIDC Integration" \
+    -s enabled=true \
+    -s clientAuthenticatorType=client-secret \
+    -s standardFlowEnabled=false \
+    -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false \
+    -s serviceAccountsEnabled=true \
+    -s publicClient=false \
+    -s protocol=openid-connect
+
+# Obter o secret gerado automaticamente
+oc exec -n rhbk-gitops deployment/rhbk -- \
+  /opt/keycloak/bin/kcadm.sh get clients -r "${REALM}" \
+    --fields clientId,secret \
+    --query "clientId=3scale-zync" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['secret'])"
+```
+
+---
+
+## 2) Atribuir roles ao service account do 3scale-zync
+
+Após criar o client, atribua as roles `manage-clients` e `view-clients` do
+`realm-management` ao service account, para que o Zync possa criar/atualizar
+clients OIDC no Keycloak automaticamente.
+
+### Via Admin Portal do Keycloak
+
+1. Em **Clients** → `3scale-zync` → aba **Service accounts roles**
+2. Clique em **Assign role**
+3. No filtro, selecione **Filter by clients** e escolha `realm-management`
+4. Selecione as roles:
    - `manage-clients`
    - `view-clients`
-6. Clique em **Assign**
+5. Clique em **Assign**
 
-### Via kcadm (opcional, se preferir CLI)
+### Via kcadm (alternativa CLI)
 
 ```bash
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
@@ -92,12 +132,26 @@ for ROLE in manage-clients view-clients; do
     /opt/keycloak/bin/kcadm.sh create users/${SA_USER_ID}/role-mappings/clients/${RM_CLIENT_ID} \
       -r "${REALM}" \
       -b "[{\"id\":\"${ROLE_ID}\",\"name\":\"${ROLE}\"}]"
+  echo "Role ${ROLE} atribuída."
 done
 ```
 
 ---
 
-## 3) Aguardar sincronização dos CRs no 3scale
+## 3) Atualizar o secret no manifesto GitOps e sincronizar
+
+Com o secret do client `3scale-zync` obtido no passo 1, atualize o campo
+`issuerEndpoint` em `gitops/echoapi/echoapi-product-oidc.yaml`:
+
+```yaml
+issuerEndpoint: "https://3scale-zync:<SEU_SECRET_AQUI>@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
+```
+
+Faça commit, push e sincronize o Argo CD Application `3scale-echoapi`.
+
+---
+
+## 4) Aguardar sincronização dos CRs no 3scale
 
 ```bash
 oc -n 3scale-gitops wait --for=condition=Synced --timeout=300s \
@@ -116,7 +170,7 @@ oc -n 3scale-gitops describe application echoapi-application-oidc
 
 ---
 
-## 4) Promover o proxy (ProxyConfigPromote)
+## 5) Promover o proxy (ProxyConfigPromote)
 
 O 3scale não publica automaticamente as configurações de staging para produção.
 Aplique o seguinte CR uma única vez após a sincronização acima:
@@ -139,7 +193,7 @@ EOF
 
 ---
 
-## 5) Obter credenciais OIDC da aplicação (client_id e client_secret)
+## 6) Obter credenciais OIDC da aplicação (client_id e client_secret)
 
 Após o Zync sincronizar, o 3scale cria automaticamente um OIDC client no Keycloak
 para a aplicação `echoapi-application-oidc`. Para obter as credenciais:
@@ -156,7 +210,7 @@ para a aplicação `echoapi-application-oidc`. Para obter as credenciais:
 
 ---
 
-## 6) Obter um Bearer Token para teste (Client Credentials Flow)
+## 7) Obter um Bearer Token para teste (Client Credentials Flow)
 
 Com o `client_id` e `client_secret` da aplicação, obtenha um token via client credentials:
 
@@ -179,7 +233,7 @@ echo "TOKEN=${TOKEN}"
 
 ---
 
-## 7) Testar o Echo API OIDC via APIcast
+## 8) Testar o Echo API OIDC via APIcast
 
 ```bash
 # Staging

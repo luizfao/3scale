@@ -208,16 +208,16 @@ Além do produto `Echo API` (autenticação por `user_key`), este repositório i
 **Via GitOps (Argo CD Application `3scale-echoapi`):**
 - `Product` com OIDC config + policy `token_introspection`
 - `Application` 3scale (`echoapi-application-oidc`)
-- Client Keycloak `3scale-zync` (via `keycloak/gitops/rhbk/realm-import/realm.yaml`)
 
 **Manual (ver `ECHOAPI_OIDC_MANUAL_STEPS.md`):**
-1. Definir e sincronizar o secret do cliente `3scale-zync` (mesmo valor em `realm.yaml` e `echoapi-product-oidc.yaml`)
-2. Atribuir roles `manage-clients` + `view-clients` ao service account do `3scale-zync` no Keycloak
-3. Executar `ProxyConfigPromote` para publicar staging → produção
-4. Obter `client_id`/`client_secret` da aplicação no Admin Portal do 3scale
-5. Gerar Bearer Token via Client Credentials e testar
+1. Criar o client `3scale-zync` no Keycloak (via Admin Portal ou `kcadm`)
+2. Atribuir roles `manage-clients` + `view-clients` ao service account do `3scale-zync`
+3. Atualizar o secret no `issuerEndpoint` de `echoapi-product-oidc.yaml` e sincronizar o Argo CD
+4. Executar `ProxyConfigPromote` para publicar staging → produção
+5. Obter `client_id`/`client_secret` da aplicação no Admin Portal do 3scale
+6. Gerar Bearer Token via Client Credentials Flow e testar
 
-### Pré-requisito: secret consistente nos dois repositórios
+### Pré-requisito: atualizar o issuerEndpoint com o secret real
 
 O campo `issuerEndpoint` do produto contém as credenciais do cliente `3scale-zync` em formato URL:
 
@@ -225,11 +225,9 @@ O campo `issuerEndpoint` do produto contém as credenciais do cliente `3scale-zy
 https://3scale-zync:ZYNC_SECRET@rhbk-rhbk-gitops.<wildcardDomain>/realms/rhbk
 ```
 
-O mesmo `ZYNC_SECRET` deve estar definido em `keycloak/gitops/rhbk/realm-import/realm.yaml` (campo `clients[].secret`). Gere um valor seguro e atualize os dois arquivos antes de sincronizar:
-
-```bash
-openssl rand -hex 20
-```
+Crie o client `3scale-zync` manualmente no Keycloak (passo 1 do `ECHOAPI_OIDC_MANUAL_STEPS.md`),
+copie o secret gerado e substitua `change-me-zync-secret` no arquivo
+`gitops/echoapi/echoapi-product-oidc.yaml` antes de sincronizar o `3scale-echoapi`.
 
 ### Comportamento da policy Token Introspection
 
