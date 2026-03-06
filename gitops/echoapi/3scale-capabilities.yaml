@@ -45,10 +45,6 @@ spec:
     basic:
       name: Basic
   policies:
-    - configuration: {}
-      name: apicast
-      version: builtin
-      enabled: true
 #TODO: update userkey
     - configuration:
         auth_type: "user_key"
@@ -67,6 +63,10 @@ spec:
       enabled: true
       name: token_introspection
       version: builtin
+    - configuration: {}
+      name: apicast
+      version: builtin
+      enabled: true
 ---
 apiVersion: capabilities.3scale.net/v1beta1
 kind: DeveloperAccount
