@@ -45,24 +45,24 @@ spec:
     basic:
       name: Basic
   policies:
-#TODO: update userkey
-    - configuration:
-        auth_type: "user_key"
-        user_key: "change-me-user-key"
-      enabled: true
-      name: default_credentials
-      version: builtin
-# TODO: update clientid, secret and url
-    - configuration:
-        auth_type: client_id+client_secret
-        client_id: "1bcd267b" 
-        client_secret: "dfc75f050b26676b80a14f9b238cd2d5"
-        introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/auth/realms/rhbk/protocol/openid-connect/token/introspect"
-        max_ttl_tokens: 60
-        max_cached_tokens: 100
-      enabled: true
-      name: token_introspection
-      version: builtin
+# #TODO: update userkey
+#     - configuration:
+#         auth_type: "user_key"
+#         user_key: "change-me-user-key"
+#       enabled: true
+#       name: default_credentials
+#       version: builtin
+# # TODO: update clientid, secret and url
+#     - configuration:
+#         auth_type: client_id+client_secret
+#         client_id: "1bcd267b" 
+#         client_secret: "b5d07a86b99cc22c1ededac1b04a1774"
+#         introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/auth/realms/rhbk/protocol/openid-connect/token/introspect"
+#         max_ttl_tokens: 60
+#         max_cached_tokens: 100
+#       enabled: true
+#       name: token_introspection
+#       version: builtin
     - configuration: {}
       name: apicast
       version: builtin
