@@ -166,7 +166,7 @@ Verificar status detalhado:
 
 ```bash
 oc -n 3scale-gitops describe product echoapi-product-oidc
-oc -n 3scale-gitops describe application echoapi-application-oidc
+oc -n 3scale-gitops describe application.capabilities.3scale.net echoapi-application-oidc
 ```
 
 ---
@@ -178,7 +178,7 @@ Aplique o seguinte CR uma única vez após a sincronização acima:
 
 ```bash
 cat <<EOF | oc apply -f -
-apiVersion: capabilities.3scale.net/v1alpha1
+apiVersion: capabilities.3scale.net/v1beta1
 kind: ProxyConfigPromote
 metadata:
   name: echoapi-oidc-promote
@@ -239,11 +239,12 @@ echo "TOKEN=${TOKEN}"
 ```bash
 # Staging
 curl -v -H "Authorization: Bearer ${TOKEN}" \
-  "https://echoapi-3scale-apicast-staging.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+  "https://echoapi-oidc-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
 
 # Produção (após ProxyConfigPromote)
 curl -v -H "Authorization: Bearer ${TOKEN}" \
-  "https://echoapi-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+  "https://echoapi-oidc-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+  
 ```
 
 Resposta esperada do echoapi (200 OK com JSON do request):
