@@ -1,4 +1,5 @@
 # Red Hat 3scale API Management 2.16 via OpenShift GitOps (Argo CD)
+NOTA: Este repositório foi criado com ajuda de IA.
 
 Este repositório contém manifests **GitOps** para instalar Red Hat 3scale API Management **2.16** em um cluster OpenShift, em um namespace dedicado, com integração de SSO opcional ao **Keycloak (RHBK)** já implantado no namespace `rhbk-gitops` (repositório [keycloak](https://github.com/luizfao/keycloak)).
 
