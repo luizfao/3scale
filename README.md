@@ -188,6 +188,58 @@ Permite que as APIs gerenciadas pelo 3scale exijam tokens JWT emitidos pelo Keyc
 
 Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs.redhat.com/en/documentation/red_hat_3scale_api_management/2.16/html-single/admin_portal_guide/) (Admin Portal / Authentication).
 
+## Echo API OIDC (OAuth 2.0 Token Introspection)
+
+Além do produto `Echo API` (autenticação por `user_key`), este repositório inclui um segundo produto **`Echo API OIDC`** que protege o mesmo backend com **OpenID Connect** e a policy de **OAuth 2.0 Token Introspection** do APIcast.
+
+### Arquitetura
+
+| Componente | Detalhes |
+|-----------|---------|
+| **Produto 3scale** | `echoapi-product-oidc` — autenticação OIDC, policy `token_introspection` |
+| **Backend** | Mesmo `echoapi-backend` (`http://echoapi.echoapi-gitops.svc.cluster.local:9292`) |
+| **IdP** | Keycloak `rhbk` realm (`rhbk-gitops`) |
+| **Client Keycloak (Zync)** | `3scale-zync` — registra OIDC clients + introspecção de tokens |
+| **Fluxo OAuth** | Client Credentials (`serviceAccountsEnabled: true`) |
+| **Cache de tokens** | `max_cached_tokens: 1000`, `max_ttl_tokens: 60s` |
+
+### O que é GitOps e o que é manual
+
+**Via GitOps (Argo CD Application `3scale-echoapi`):**
+- `Product` com OIDC config + policy `token_introspection`
+- `Application` 3scale (`echoapi-application-oidc`)
+- Client Keycloak `3scale-zync` (via `keycloak/gitops/rhbk/realm-import/realm.yaml`)
+
+**Manual (ver `ECHOAPI_OIDC_MANUAL_STEPS.md`):**
+1. Definir e sincronizar o secret do cliente `3scale-zync` (mesmo valor em `realm.yaml` e `echoapi-product-oidc.yaml`)
+2. Atribuir roles `manage-clients` + `view-clients` ao service account do `3scale-zync` no Keycloak
+3. Executar `ProxyConfigPromote` para publicar staging → produção
+4. Obter `client_id`/`client_secret` da aplicação no Admin Portal do 3scale
+5. Gerar Bearer Token via Client Credentials e testar
+
+### Pré-requisito: secret consistente nos dois repositórios
+
+O campo `issuerEndpoint` do produto contém as credenciais do cliente `3scale-zync` em formato URL:
+
+```
+https://3scale-zync:ZYNC_SECRET@rhbk-rhbk-gitops.<wildcardDomain>/realms/rhbk
+```
+
+O mesmo `ZYNC_SECRET` deve estar definido em `keycloak/gitops/rhbk/realm-import/realm.yaml` (campo `clients[].secret`). Gere um valor seguro e atualize os dois arquivos antes de sincronizar:
+
+```bash
+openssl rand -hex 20
+```
+
+### Comportamento da policy Token Introspection
+
+- APIcast recebe a requisição com `Authorization: Bearer <JWT>`
+- Chama o endpoint de introspecção do Keycloak: `/realms/rhbk/protocol/openid-connect/token/introspect`
+- Keycloak retorna `{ "active": true/false }` — se `false`, APIcast rejeita com `Authentication Failed`
+- Tokens são cacheados por até `max_ttl_tokens` segundos para reduzir chamadas ao Keycloak
+
+---
+
 ## Estrutura do repositório (manifestos)
 
 | Caminho | Descrição |
@@ -205,9 +257,11 @@ Referência: [Securing APIs using OIDC with Red Hat Single Sign-On](https://docs
 | `gitops/databases/redis-backend/redis.yaml` | Redis para Backend (storage + queues) em `3scale-databases` |
 | `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
 | `gitops/apimanager/apimanager.yaml` | APIManager CR (`wildcardDomain` + `externalComponents`) |
-| `gitops/echoapi/echo-server.yaml` | Deploy do backend `echoapi` interno (ClusterIP) |
-| `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product`, `DeveloperAccount`, `DeveloperUser`, `Application` |
-| `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API |
+| `gitops/echoapi/echo-server.yaml` | Deploy do backend `echoapi` interno (ClusterIP) no namespace `echoapi-gitops` |
+| `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product` (user_key), `DeveloperAccount`, `DeveloperUser`, `Application` |
+| `gitops/echoapi/echoapi-product-oidc.yaml` | `Product` OIDC + Token Introspection e `Application` correspondente |
+| `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API (user_key) |
+| `ECHOAPI_OIDC_MANUAL_STEPS.md` | Passos manuais para Echo API OIDC: secret Zync, roles Keycloak, token e teste |
 
 ## Observações
 

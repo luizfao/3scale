@@ -1,0 +1,81 @@
+# Echo API OIDC Product
+# New product using the same echoapi-backend with OpenID Connect authentication
+# and the OAuth 2.0 Token Introspection policy.
+# The issuerEndpoint embeds the 3scale-zync client credentials so that:
+#   - Zync can register OIDC application clients in Keycloak automatically
+#   - APIcast can call the token introspection endpoint (use_3scale_oidc_issuer_endpoint)
+#
+# IMPORTANT: Replace 'change-me-zync-secret' with the actual client secret set in
+# keycloak/gitops/rhbk/realm-import/realm.yaml before syncing this product.
+# After syncing, follow ECHOAPI_OIDC_MANUAL_STEPS.md to:
+#   1. Assign manage-clients role to the 3scale-zync service account in Keycloak
+#   2. Promote the proxy configuration
+#   3. Test with a Bearer token
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Product
+metadata:
+  name: echoapi-product-oidc
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  name: Echo API OIDC
+  systemName: echoapi_oidc
+  deployment:
+    apicastHosted:
+      authentication:
+        oidc:
+          issuerType: "keycloak"
+          # Format: https://CLIENT_ID:CLIENT_SECRET@KEYCLOAK_HOST/realms/REALM
+          # Update 'change-me-zync-secret' to match the secret in realm.yaml
+          issuerEndpoint: "https://3scale-zync:change-me-zync-secret@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
+          authenticationFlow:
+            standardFlowEnabled: false
+            implicitFlowEnabled: false
+            serviceAccountsEnabled: true
+            directAccessGrantsEnabled: true
+          jwtClaimWithClientID: "azp"
+          jwtClaimWithClientIDType: "plain"
+  backendUsages:
+    echoapi_backend:
+      path: /
+  mappingRules:
+    - httpMethod: GET
+      pattern: /
+      increment: 1
+      metricMethodRef: hits
+  applicationPlans:
+    basic-oidc:
+      name: Basic OIDC
+  policies:
+    # Token Introspection policy: validates JWT Bearer tokens against Keycloak
+    # using the credentials embedded in issuerEndpoint (use_3scale_oidc_issuer_endpoint).
+    # max_cached_tokens and max_ttl_tokens reduce repeated introspection calls.
+    - name: token_introspection
+      version: builtin
+      enabled: true
+      configuration:
+        auth_type: use_3scale_oidc_issuer_endpoint
+        max_cached_tokens: 1000
+        max_ttl_tokens: 60
+    - name: apicast
+      version: builtin
+      enabled: true
+      configuration: {}
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Application
+metadata:
+  name: echoapi-application-oidc
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  name: Echo API OIDC App
+  description: Echo API test application (OIDC + Token Introspection)
+  accountCR:
+    name: echoapi-account
+  productCR:
+    name: echoapi-product-oidc
+  applicationPlanName: basic-oidc

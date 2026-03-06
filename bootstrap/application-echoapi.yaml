@@ -14,4 +14,7 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: 3scale-gitops
-  syncPolicy: {}
+  syncPolicy:
+    automated:
+    prune: false
+    selfHeal: false
