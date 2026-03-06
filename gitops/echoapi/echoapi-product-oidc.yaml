@@ -80,3 +80,35 @@ spec:
   productCR:
     name: echoapi-product-oidc
   applicationPlanName: basic-oidc
+---
+# Pre-defined credentials for echoapi-product-oidc (OIDC authentication).
+# ApplicationID = client_id registered in Keycloak by Zync.
+# ApplicationKey = client_secret used by the application to obtain tokens.
+# Update both values before syncing. ApplicationKey must be at least 5 characters.
+# After ApplicationAuth runs successfully, the operator writes the effective ApplicationID back here.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: echoapi-product-oidc-appauth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+type: Opaque
+stringData:
+  ApplicationID: "change-me-app-id"
+  ApplicationKey: "change-me-app-key"
+---
+# ApplicationAuth is a one-off action: once Ready, the operator will not re-apply it.
+# It sets the ApplicationKey (client_secret) on echoapi-application-oidc.
+apiVersion: capabilities.3scale.net/v1beta1
+kind: ApplicationAuth
+metadata:
+  name: echoapi-product-oidc-appauth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  applicationCRName: echoapi-application-oidc
+  generateSecret: false
+  authSecretRef:
+    name: echoapi-product-oidc-appauth

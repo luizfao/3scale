@@ -194,32 +194,54 @@ EOF
 
 ---
 
-## 6) Obter credenciais OIDC da aplicação (client_id e client_secret)
+## 6) Definir e verificar credenciais via ApplicationAuth (GitOps)
 
-Após o Zync sincronizar, o 3scale cria automaticamente um OIDC client no Keycloak
-para a aplicação `echoapi-application-oidc`. Para obter as credenciais:
+O `ApplicationAuth` `echoapi-product-oidc-appauth` define o par `ApplicationID`/`ApplicationKey`
+da aplicação `echoapi-application-oidc` a partir da Secret `echoapi-product-oidc-appauth`.
+Antes de sincronizar:
 
-**Via Admin Portal do 3scale:**
-1. Acesse: `https://3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
-2. Vá em **Audience** → **Accounts** → `Echo API Org` → **Applications**
-3. Clique em `Echo API OIDC App`
-4. Anote o **Client ID** e o **Client Secret** mostrados em **API Credentials**
+1. Edite `gitops/echoapi/echoapi-product-oidc.yaml` → Secret `echoapi-product-oidc-appauth`
+2. Substitua `change-me-app-id` e `change-me-app-key` pelos valores desejados (mínimo 5 caracteres)
+3. Faça commit, push e sincronize o Argo CD Application `3scale-echoapi`
 
-**Via Admin Portal do Keycloak (confirmar):**
-1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/rhbk/console/`
-2. Vá em **Clients** — procure pelo client_id obtido no passo anterior
+> **Nota sobre `ApplicationID` (OIDC):** Para aplicações OIDC, o `ApplicationID` é o `client_id`
+> registrado pelo Zync no Keycloak. Se a aplicação já foi criada (Zync registrou um client_id
+> automático), o operador preencherá o `ApplicationID` na Secret com o ID existente.
+> O `ApplicationKey` (client_secret) será atualizado com o valor fornecido.
+
+Após o sync, verifique o status:
+
+```bash
+oc -n 3scale-gitops get applicationauth echoapi-product-oidc-appauth -o yaml
+```
+
+Recuperar as credenciais efetivas a qualquer momento:
+
+```bash
+# ApplicationID (client_id no Keycloak)
+oc -n 3scale-gitops get secret echoapi-product-oidc-appauth \
+  -o jsonpath='{.data.ApplicationID}' | base64 -d; echo
+
+# ApplicationKey (client_secret)
+oc -n 3scale-gitops get secret echoapi-product-oidc-appauth \
+  -o jsonpath='{.data.ApplicationKey}' | base64 -d; echo
+```
 
 ---
 
 ## 7) Obter um Bearer Token para teste (Client Credentials Flow)
 
-Com o `client_id` e `client_secret` da aplicação, obtenha um token via client credentials:
+Com as credenciais armazenadas na Secret (após o ApplicationAuth do passo 6), obtenha
+um token diretamente:
 
 ```bash
-CLIENT_ID="<client_id da aplicação echoapi-application-oidc>"
-CLIENT_SECRET="<client_secret da aplicação>"
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
 REALM="rhbk"
+
+CLIENT_ID=$(oc -n 3scale-gitops get secret echoapi-product-oidc-appauth \
+  -o jsonpath='{.data.ApplicationID}' | base64 -d)
+CLIENT_SECRET=$(oc -n 3scale-gitops get secret echoapi-product-oidc-appauth \
+  -o jsonpath='{.data.ApplicationKey}' | base64 -d)
 
 TOKEN=$(curl -s -X POST \
   "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \

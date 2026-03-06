@@ -52,22 +52,36 @@ spec:
 EOF
 ```
 
-## 4) Criar credenciais da aplicacao (manual)
+## 4) Definir e verificar credenciais via ApplicationAuth (GitOps)
 
-Para evitar o erro de limite de chaves (`ApplicationKey limit reached`), o recurso `ApplicationAuth` nao e gerenciado por GitOps.
-Crie/obtenha as credenciais da app diretamente no Admin Portal:
+O `ApplicationAuth` `echoapi-product-appauth` define o `UserKey` da aplicação `echoapi-application-v2`
+a partir da Secret `echoapi-product-appauth`. Antes de sincronizar:
 
-- Audience -> Accounts -> `Echo API Org` -> Applications -> `Echo API App v2`
-- Em Credentials, copie um dos formatos disponiveis:
-  - `user_key`
-  - ou `app_id` + `app_key`
+1. Edite `gitops/echoapi/3scale-capabilities.yaml` → Secret `echoapi-product-appauth`
+2. Substitua `change-me-user-key` pelo valor desejado (mínimo 5 caracteres)
+3. Faça commit, push e sincronize o Argo CD Application `3scale-echoapi`
 
-Opcional: armazenar a credencial no cluster para uso em scripts:
+Após o sync, verifique se o `ApplicationAuth` foi aplicado com sucesso:
 
 ```bash
-oc -n 3scale-gitops create secret generic echoapi-app-auth-v2 \
-  --from-literal=user_key='<USER_KEY>' \
-  --dry-run=client -o yaml | oc apply -f -
+oc -n 3scale-gitops get applicationauth echoapi-product-appauth -o yaml
+```
+
+O status esperado após sucesso:
+
+```yaml
+status:
+  conditions:
+    - status: "True"
+      type: Ready
+      message: "Application authentication has been successfully pushed..."
+```
+
+Recuperar o `UserKey` efetivo a qualquer momento:
+
+```bash
+oc -n 3scale-gitops get secret echoapi-product-appauth \
+  -o jsonpath='{.data.UserKey}' | base64 -d; echo
 ```
 
 ## 5) Descobrir endpoint publico e testar chamada externa

@@ -93,3 +93,32 @@ spec:
     name: echoapi-product
   applicationPlanName: basic
 ---
+# Pre-defined UserKey for echoapi-product (user_key authentication).
+# Update 'change-me-user-key' to the desired key value (min 5 characters) before syncing.
+# After ApplicationAuth runs successfully, this secret will also contain the ApplicationID.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: echoapi-product-appauth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+type: Opaque
+stringData:
+  UserKey: "change-me-user-key"
+---
+# ApplicationAuth is a one-off action: once Ready, the operator will not re-apply it.
+# It sets the UserKey on echoapi-application-v2 using the value from the secret above.
+apiVersion: capabilities.3scale.net/v1beta1
+kind: ApplicationAuth
+metadata:
+  name: echoapi-product-appauth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  applicationCRName: echoapi-application-v2
+  generateSecret: false
+  authSecretRef:
+    name: echoapi-product-appauth
+---

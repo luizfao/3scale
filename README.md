@@ -276,3 +276,4 @@ copie o secret gerado e substitua `change-me-zync-secret` no arquivo
 - Adicionar resumo na introdução, detalhes e link para o `ECHOAPI_MANUAL_STEPS.md` nos passos de execução para deixar claro o papel do echoapi;
 - Separar a instação do operador das bases para dividir as responsabilidades, facilitar a instalação e o entendimento;
 - Adicionar passos de "fork" para utilização e `contributing.md` para melhorias;
+- Adicionar documentação do ApplicationAuth
