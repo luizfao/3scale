@@ -84,6 +84,7 @@ oc -n 3scale-gitops get secret echoapi-product-appauth \
   -o jsonpath='{.data.UserKey}' | base64 -d; echo
 ```
 
+<!--
 ## 5) Descobrir endpoint publico e testar chamada externa
 
 O endpoint publico do produto e exibido no 3scale Admin Portal:
@@ -101,4 +102,36 @@ Se seu produto estiver em `app_id/app_key`, ajuste os parametros:
 
 ```bash
 curl -i "https://<public-echoapi-url>/?app_id=<APP_ID>&app_key=<APP_KEY>"
+```
+
+-->
+
+## 5) Testar chamada externa
+
+O produto `Echo API` usa a policy `token_introspection` combinada com `default_credentials`.
+O caller precisa apenas de um Bearer JWT válido do Keycloak — o `user_key` é injetado
+automaticamente pelo APIcast via a policy `default_credentials`.
+
+### Obter um Bearer Token (client credentials do client configurado)
+
+```bash
+CLIENT_ID="" # TODO: obter client_id
+CLIENT_SECRET="" # TODO: obter client_secret
+KC_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+
+TOKEN=$(curl -s -X POST "${KC_URL}/realms/rhbk/protocol/openid-connect/token" \
+  -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+```
+
+### Testar nos 2 endpoints
+
+```bash
+# Staging
+curl -i -H "Authorization: Bearer ${TOKEN}" \
+  "https://echoapi-3scale-apicast-staging.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+
+# Production
+curl -i -H "Authorization: Bearer ${TOKEN}" \
+  "https://echoapi-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
 ```
