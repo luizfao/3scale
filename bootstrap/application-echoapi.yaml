@@ -11,12 +11,10 @@ spec:
     path: gitops/echoapi
     directory:
       recurse: true
-      # Exclui todos os arquivos do diretório echoapi para fazer limpeza
-#      exclude: '{*.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: 3scale-gitops
-  syncPolicy: 
-  automated: {}
-#    prune: true
-#    selfHeal: false
+  syncPolicy: {}
+#   automated:
+#     prune: false
+#     selfHeal: false
