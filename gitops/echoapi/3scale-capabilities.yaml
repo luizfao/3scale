@@ -56,7 +56,7 @@ spec:
 #     - configuration:
 #         auth_type: client_id+client_secret
 #         client_id: "1bcd267b" 
-#         client_secret: "b5d07a86b99cc22c1ededac1b04a1774"
+#         client_secret: "b5d07a86b99cc22c1ededac1b04a1774" # notsecret - test data
 #         introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/auth/realms/rhbk/protocol/openid-connect/token/introspect"
 #         max_ttl_tokens: 60
 #         max_cached_tokens: 100
