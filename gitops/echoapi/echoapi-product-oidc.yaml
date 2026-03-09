@@ -21,7 +21,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "4"
 spec:
   name: Echo API OIDC
-  systemName: echoapi_oidc
+  systemName: echoapi_oidc2
   deployment:
     apicastHosted:
       authentication:
@@ -39,7 +39,7 @@ spec:
           jwtClaimWithClientID: "azp"
           jwtClaimWithClientIDType: "plain"
   backendUsages:
-    echoapi_backend:
+    echoapi_backend_2:
       path: /
   mappingRules:
     - httpMethod: GET

@@ -18,7 +18,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
 spec:
   name: Echo API Backend
-  systemName: echoapi_backend
+  systemName: echoapi_backend_2
   privateBaseURL: http://echoapi.echoapi-gitops.svc.cluster.local:9292
 ---
 apiVersion: capabilities.3scale.net/v1beta1
@@ -30,11 +30,11 @@ metadata:
     argocd.argoproj.io/sync-wave: "4"
 spec:
   name: Echo API
-  systemName: echoapi
+  systemName: echoapi2
   deployment:
     apicastHosted: {}
   backendUsages:
-    echoapi_backend:
+    echoapi_backend_2:
       path: /
   mappingRules:
     - httpMethod: GET
