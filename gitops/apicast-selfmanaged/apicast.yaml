@@ -1,13 +1,23 @@
 # APIcast Self-Managed — HA ativo-passivo
 #
+# Um único par de pods APIcast (production + staging) serve todos os produtos.
+# Cada produto recebe um hostname distinto para evitar conflito de host no APIcast:
+#
+#   echoapi-product (user_key):
+#     production → api.example.com
+#     staging    → api-staging.example.com
+#
+#   echoapi-product-oidc (OIDC):
+#     production → api-oidc.example.com
+#     staging    → api-oidc-staging.example.com
+#
+# O APIcast CR cria o Route somente para o primeiro hostname de cada pod.
+# Routes adicionais para os produtos OIDC são gerenciados manualmente neste arquivo
+# (ao final) e apontam para os mesmos serviços criados pelo APIcast CR.
+#
 # ANTES DE SINCRONIZAR:
-#   1. Substitua CHANGE_ME_ADMIN_ACCESS_TOKEN pelo token real:
-#        oc -n 3scale-gitops get secret system-seed \
-#          -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d
-#   2. Substitua api.example.com e api-staging.example.com pelas URLs independentes reais.
-#      Estas URLs devem estar apontadas (via DNS/LB externo) para o router deste cluster.
-#   3. Atualize também spec.deployment.apicastSelfManaged nos Products em gitops/echoapi/
-#      para usar os mesmos hostnames definidos aqui.
+#   Substitua *.example.com pelas URLs independentes reais apontadas via DNS/LB externo.
+#   Atualize também spec.deployment.apicastSelfManaged nos Products em gitops/echoapi/.
 #
 # Após sincronizar: execute ProxyConfigPromote para ambos os produtos.
 ---
@@ -60,3 +70,36 @@ spec:
   deploymentEnvironment: staging
   exposedHost:
     host: api-staging.example.com   # substitua pela URL independente de staging
+---
+# Routes adicionais para echoapi-product-oidc.
+# Apontam para os mesmos serviços criados pelo APIcast CR, com hostnames distintos
+# para que o APIcast possa diferenciar os dois produtos pelo Host header.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicast-ha-production-oidc
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  host: api-oidc.example.com   # substitua pela URL independente de produção OIDC
+  to:
+    kind: Service
+    name: apicast-apicast-ha-production
+  port:
+    targetPort: proxy
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicast-ha-staging-oidc
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  host: api-oidc-staging.example.com   # substitua pela URL independente de staging OIDC
+  to:
+    kind: Service
+    name: apicast-apicast-ha-staging
+  port:
+    targetPort: proxy

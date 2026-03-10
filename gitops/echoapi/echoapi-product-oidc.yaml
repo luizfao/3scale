@@ -24,8 +24,8 @@ spec:
   systemName: echoapi_oidc
   deployment:
     apicastSelfManaged:
-      stagingPublicBaseURL: "https://api-staging.example.com"
-      productionPublicBaseURL: "https://api.example.com"
+      stagingPublicBaseURL: "http://api-oidc-staging.example.com"
+      productionPublicBaseURL: "http://api-oidc.example.com"
       authentication:
         oidc:
           issuerType: "keycloak"
