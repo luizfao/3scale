@@ -21,7 +21,7 @@
 #   name: apicast-ha-portal-credentials
 #   namespace: 3scale-gitops
 #   annotations:
-#     argocd.argoproj.io/sync-wave: "1"
+#     argocd.argoproj.io/sync-wave: "-1"
 # type: Opaque
 # stringData:
 #   AdminPortalURL: "https://CHANGE_ME_ADMIN_ACCESS_TOKEN@3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
@@ -35,7 +35,7 @@ metadata:
   name: apicast-ha-production
   namespace: 3scale-gitops
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
   adminPortalCredentialsRef:
@@ -52,7 +52,7 @@ metadata:
   name: apicast-ha-staging
   namespace: 3scale-gitops
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
   adminPortalCredentialsRef:
