@@ -1,7 +1,20 @@
+# OperatorGroup 3scale Operator 2.16 (Manual)
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
   name: 3scale-operator
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "-21"
+spec:
+  targetNamespaces:
+    - 3scale-gitops
+---
+# OperatorGroup APIcast Operator 0.13.2 (Manual)
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: apicast-operator
   namespace: 3scale-gitops
   annotations:
     argocd.argoproj.io/sync-wave: "-21"
