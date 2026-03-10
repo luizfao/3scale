@@ -13,8 +13,8 @@
 ---
 # Secret com o endpoint do portal 3scale + access token para os APIcast buscar a configuração.
 # O token é o mesmo utilizado para acessar o Admin Portal via API.
-# Populado automaticamente pelo PostSync Job em gitops/apimanager/apicast-secret-init.yaml
-# após o sync do Application '3scale-apimanager'. Não edite manualmente.
+# Populado automaticamente pelo PreSync Job em gitops/apicast-selfmanaged/apicast-secret-init.yaml
+# antes de cada sync do Application '3scale-apicast-selfmanaged'. Não edite manualmente.
 # apiVersion: v1
 # kind: Secret
 # metadata:
