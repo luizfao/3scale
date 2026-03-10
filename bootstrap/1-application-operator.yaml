@@ -1,18 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: 3scale
+  name: 3scale-operator
   namespace: openshift-gitops
 spec:
   project: default
   source:
     repoURL: https://github.com/luizfao/3scale.git
     targetRevision: main
-    path: gitops
+    path: gitops/operator
     directory:
       recurse: true
-      # APIManager é aplicado por um Application separado (application-apimanager.yaml) após o operador estar instalado.
-      exclude: '{apimanager/*,echoapi/*}'
   destination:
     server: https://kubernetes.default.svc
     namespace: 3scale-gitops

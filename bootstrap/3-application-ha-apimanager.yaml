@@ -1,0 +1,30 @@
+# Argo CD Application — APIManager (cluster HA)
+#
+# Único arquivo específico do cluster HA. Os demais bootstrap files são idênticos
+# ao cluster primário e podem ser reutilizados diretamente.
+#
+# Para instalar o 3scale no cluster HA, fazer login no cluster HA e aplicar nesta ordem:
+#   oc login https://api.cluster-z7rk2.dynamic.redhatworkshops.io:6443
+#   oc apply -f bootstrap/1-application-operator.yaml       # mesmo arquivo do cluster primário
+#   # aguardar Install Plan → oc -n 3scale-gitops get installplan
+#   oc apply -f bootstrap/2-application-databases.yaml      # mesmo arquivo do cluster primário
+#   oc apply -f bootstrap/3-application-ha-apimanager.yaml  # este arquivo (wildcardDomain do cluster HA)
+#   oc apply -f bootstrap/4-application-apicast-selfmanaged.yaml  # mesmo arquivo
+#   oc apply -f bootstrap/5-application-echoapi.yaml              # mesmo arquivo
+#
+# syncPolicy: {} mantém sync manual para permitir aprovação do Install Plan antes de aplicar o CR.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 3scale-ha-apimanager
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/luizfao/3scale.git
+    targetRevision: main
+    path: gitops/apimanager-ha
+  destination:
+    server: https://kubernetes.default.svc   # local ao cluster HA
+    namespace: 3scale-gitops
+  syncPolicy: {}

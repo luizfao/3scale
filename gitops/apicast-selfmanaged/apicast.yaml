@@ -1,0 +1,62 @@
+# APIcast Self-Managed — HA ativo-passivo
+#
+# ANTES DE SINCRONIZAR:
+#   1. Substitua CHANGE_ME_ADMIN_ACCESS_TOKEN pelo token real:
+#        oc -n 3scale-gitops get secret system-seed \
+#          -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d
+#   2. Substitua api.example.com e api-staging.example.com pelas URLs independentes reais.
+#      Estas URLs devem estar apontadas (via DNS/LB externo) para o router deste cluster.
+#   3. Atualize também spec.deployment.apicastSelfManaged nos Products em gitops/echoapi/
+#      para usar os mesmos hostnames definidos aqui.
+#
+# Após sincronizar: execute ProxyConfigPromote para ambos os produtos.
+---
+# Secret com o endpoint do portal 3scale + access token para os APIcast buscar a configuração.
+# O token é o mesmo utilizado para acessar o Admin Portal via API.
+# Populado automaticamente pelo PostSync Job em gitops/apimanager/apicast-secret-init.yaml
+# após o sync do Application '3scale-apimanager'. Não edite manualmente.
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: apicast-ha-portal-credentials
+#   namespace: 3scale-gitops
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "1"
+# type: Opaque
+# stringData:
+#   AdminPortalURL: "https://CHANGE_ME_ADMIN_ACCESS_TOKEN@3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+---
+# APIcast de produção — responde na URL independente gerenciada pelo LB externo.
+# deploymentEnvironment: production usa configuração em cache (boot-loaded),
+# adequado para tráfego real com menor latência.
+apiVersion: apps.3scale.net/v1alpha1
+kind: APIcast
+metadata:
+  name: apicast-ha-production
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 1
+  adminPortalCredentialsRef:
+    name: apicast-ha-portal-credentials
+  deploymentEnvironment: production
+  exposedHost:
+    host: api.example.com   # substitua pela URL independente de produção
+---
+# APIcast de staging — pode usar URL independente de staging ou wildcard do cluster.
+# deploymentEnvironment: staging faz validação em tempo real contra o 3scale backend.
+apiVersion: apps.3scale.net/v1alpha1
+kind: APIcast
+metadata:
+  name: apicast-ha-staging
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 1
+  adminPortalCredentialsRef:
+    name: apicast-ha-portal-credentials
+  deploymentEnvironment: staging
+  exposedHost:
+    host: api-staging.example.com   # substitua pela URL independente de staging

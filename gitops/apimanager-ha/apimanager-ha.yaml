@@ -1,0 +1,39 @@
+# Red Hat 3scale API Management 2.16 - APIManager CR (cluster HA)
+# Idêntico ao gitops/apimanager/apimanager.yaml, mas com o wildcardDomain do cluster HA.
+# Este arquivo é gerenciado pelo ArgoCD local do cluster HA via bootstrap/application-ha-apimanager.yaml.
+#
+# ANTES DE SINCRONIZAR:
+#   - Verifique se o storageClassName está disponível no cluster HA:
+#       oc get storageclass
+#     Altere 'ocs-external-storagecluster-cephfs' se o cluster HA usar um nome diferente.
+#   - Certifique-se de que os Secrets de banco de dados externo (system-database, redis-*)
+#     foram criados no namespace 3scale-gitops (aplicados pelo Application '3scale' via GitOps).
+#
+# See: https://docs.redhat.com/en/documentation/red_hat_3scale_api_management/2.16/html-single/installing_red_hat_3scale_api_management/
+apiVersion: apps.3scale.net/v1alpha1
+kind: APIManager
+metadata:
+  name: apimanager
+  namespace: 3scale-gitops
+  annotations:
+    # APIManager CRD é criado pelo operador 3scale; use uma wave posterior para que o operador
+    # possa ser instalado (e o Install Plan aprovado) antes de aplicar o CR.
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  wildcardDomain: apps.cluster-z7rk2.dynamic.redhatworkshops.io
+  # 2.16 requires external System DB + Redis; Zync DB is kept internal (operator-managed).
+  externalComponents:
+    backend:
+      redis: true
+    system:
+      database: true
+      redis: true
+    # Zync database can be internal
+    # zync:
+    #   database: true
+  # Ajuste storageClassName se o cluster HA usar uma StorageClass diferente.
+  # Ceph RBD does not support RWX; use CephFS for system file storage (Developer Portal / assets).
+  system:
+    fileStorage:
+      persistentVolumeClaim:
+        storageClassName: ocs-external-storagecluster-cephfs

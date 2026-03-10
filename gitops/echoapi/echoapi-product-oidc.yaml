@@ -23,7 +23,9 @@ spec:
   name: Echo API OIDC
   systemName: echoapi_oidc
   deployment:
-    apicastHosted:
+    apicastSelfManaged:
+      stagingPublicBaseURL: "https://api-staging.example.com"
+      productionPublicBaseURL: "https://api.example.com"
       authentication:
         oidc:
           issuerType: "keycloak"

@@ -32,7 +32,9 @@ spec:
   name: Echo API
   systemName: echoapi
   deployment:
-    apicastHosted: {}
+    apicastSelfManaged:
+      stagingPublicBaseURL: "https://api-staging.example.com"
+      productionPublicBaseURL: "https://api.example.com"
   backendUsages:
     echoapi_backend:
       path: /
