@@ -1,0 +1,121 @@
+# Echo API RHBK Auth Product
+#
+# Padrão: Anonymous Access + OAuth 2.0 Token Introspection
+#
+# O cliente envia APENAS Authorization: Bearer <token_keycloak> — nenhuma user_key
+# 3scale é necessária. Qualquer usuário com conta válida no Keycloak pode usar a API.
+#
+# Fluxo de autenticação:
+#   1. anonymous_access  → injeta user_key padrão (para tracking/rate-limit no 3scale)
+#   2. token_introspection → valida o Bearer JWT via endpoint de introspeção do Keycloak
+#   3. apicast           → authrep ao 3scale backend com a user_key anônima
+#
+# Referência: https://docs.redhat.com/en/documentation/red_hat_3scale_api_management/2.16/html/administering_the_api_gateway/apicast-policies#anonymous-access_standard-policies
+#
+# ANTES DE SINCRONIZAR:
+#   - Substitua api-rhbk*.example.com pelos hostnames reais (DNS/LB externo)
+#   - Atualize client_id/client_secret/introspection_url se usar outro client Keycloak
+#
+# Após sincronizar: execute ProxyConfigPromote (ver ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md)
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Product
+metadata:
+  name: echoapi-product-rhbk-auth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  name: Echo API RHBK Auth
+  systemName: echoapi_rhbk_auth
+  deployment:
+    apicastSelfManaged:
+      stagingPublicBaseURL: "http://api-rhbk-staging.example.com"
+      productionPublicBaseURL: "http://api-rhbk.example.com"
+  backendUsages:
+    echoapi_backend:
+      path: /
+  mappingRules:
+    - httpMethod: GET
+      pattern: /
+      increment: 1
+      metricMethodRef: hits
+  applicationPlans:
+    basic-rhbk:
+      name: Basic RHBK
+  policies:
+    # 1. Anonymous Access — injeta user_key padrão para requests sem credenciais 3scale.
+    #    DEVE vir antes do apicast policy (doc 3scale 2.16 sec 4.1.5).
+    #    A user_key abaixo corresponde à Application echoapi-application-rhbk-anon.
+    - name: anonymous_access
+      version: builtin
+      enabled: true
+      configuration:
+        auth_type: user_key
+        user_key: "rhbk-anon-key"
+    # 2. Token Introspection — valida Bearer JWT emitido pelo Keycloak (realm rhbk).
+    #    Reusa o client 4d045da9 já existente para chamar o endpoint de introspeção.
+    #    Se { "active": false }, APIcast rejeita com 403.
+    - name: token_introspection
+      version: builtin
+      enabled: true
+      configuration:
+        auth_type: client_id+client_secret
+        client_id: "4d045da9"
+        client_secret: "a3de2050e258e641f8aa643b2a39ffb6" # notsecret - test data
+        introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk/protocol/openid-connect/token/introspect"
+        max_ttl_tokens: 60
+        max_cached_tokens: 100
+    # 3. APIcast — processamento padrão: authrep ao 3scale backend com a user_key anônima.
+    - name: apicast
+      version: builtin
+      enabled: true
+      configuration: {}
+---
+# Aplicação anônima do 3scale — usada exclusivamente para tracking e rate-limiting.
+# O usuário final não precisa conhecer esta aplicação; a policy anonymous_access
+# a injeta automaticamente em toda requisição que não traz user_key 3scale.
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Application
+metadata:
+  name: echoapi-application-rhbk-anon
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  name: Echo API RHBK Anon App
+  description: Aplicação anônima para tracking/rate-limit do produto RHBK Auth
+  accountCR:
+    name: echoapi-account
+  productCR:
+    name: echoapi-product-rhbk-auth
+  applicationPlanName: basic-rhbk
+---
+# UserKey pré-definida para a aplicação anônima.
+# Este valor é referenciado pela policy anonymous_access acima.
+# Não precisa ser confidencial — não é exposta ao cliente final.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: echoapi-rhbk-anon-appauth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+type: Opaque
+stringData:
+  UserKey: "rhbk-anon-key"
+---
+# ApplicationAuth — define a UserKey da aplicação anônima no 3scale.
+# Executado uma única vez; após Ready, o operador não re-aplica.
+apiVersion: capabilities.3scale.net/v1beta1
+kind: ApplicationAuth
+metadata:
+  name: echoapi-rhbk-anon-appauth
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  applicationCRName: echoapi-application-rhbk-anon
+  generateSecret: false
+  authSecretRef:
+    name: echoapi-rhbk-anon-appauth

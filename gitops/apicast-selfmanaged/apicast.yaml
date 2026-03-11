@@ -11,8 +11,12 @@
 #     production → api-oidc.example.com
 #     staging    → api-oidc-staging.example.com
 #
+#   echoapi-product-rhbk-auth (anonymous + token_introspection):
+#     production → api-rhbk.example.com
+#     staging    → api-rhbk-staging.example.com
+#
 # O APIcast CR cria o Route somente para o primeiro hostname de cada pod.
-# Routes adicionais para os produtos OIDC são gerenciados manualmente neste arquivo
+# Routes adicionais para os demais produtos são gerenciados manualmente neste arquivo
 # (ao final) e apontam para os mesmos serviços criados pelo APIcast CR.
 #
 # ANTES DE SINCRONIZAR:
@@ -51,6 +55,7 @@ spec:
   adminPortalCredentialsRef:
     name: apicast-ha-portal-credentials
   deploymentEnvironment: production
+  logLevel: debug
   exposedHost:
     host: api.example.com   # substitua pela URL independente de produção
 ---
@@ -68,6 +73,8 @@ spec:
   adminPortalCredentialsRef:
     name: apicast-ha-portal-credentials
   deploymentEnvironment: staging
+  logLevel: debug
+  oidcLogLevel: debug
   exposedHost:
     host: api-staging.example.com   # substitua pela URL independente de staging
 ---
@@ -98,6 +105,38 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   host: api-oidc-staging.example.com   # substitua pela URL independente de staging OIDC
+  to:
+    kind: Service
+    name: apicast-apicast-ha-staging
+  port:
+    targetPort: proxy
+---
+# Routes para echoapi-product-rhbk-auth (Anonymous + Token Introspection).
+# Mesmo padrão dos routes OIDC — apontam para os mesmos serviços APIcast HA.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicast-ha-production-rhbk
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  host: api-rhbk.example.com   # substitua pela URL independente de produção RHBK Auth
+  to:
+    kind: Service
+    name: apicast-apicast-ha-production
+  port:
+    targetPort: proxy
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicast-ha-staging-rhbk
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  host: api-rhbk-staging.example.com   # substitua pela URL independente de staging RHBK Auth
   to:
     kind: Service
     name: apicast-apicast-ha-staging

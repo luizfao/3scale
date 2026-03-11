@@ -239,6 +239,43 @@ copie o secret gerado e substitua `change-me-zync-secret` no arquivo
 
 ---
 
+## Echo API RHBK Auth (Anonymous + Token Introspection)
+
+Terceiro produto, que implementa autenticação com qualquer usuário do Keycloak, sem necessidade de registro no 3scale.
+
+### Arquitetura
+
+| Componente | Detalhes |
+|-----------|---------|
+| **Produto 3scale** | `echoapi-product-rhbk-auth` — autenticação user_key + policies `anonymous_access` + `token_introspection` |
+| **Backend** | Mesmo `echoapi-backend` (`http://echoapi.echoapi-gitops.svc.cluster.local:9292`) |
+| **IdP** | Keycloak `rhbk` realm (`rhbk-gitops`) |
+| **Client Keycloak** | `4d045da9` — reutilizado para chamar o endpoint de introspeção (nenhum client novo necessário) |
+| **Fluxo de autenticação** | Qualquer fluxo Keycloak (client credentials, password, etc.) |
+| **Cache de tokens** | `max_cached_tokens: 100`, `max_ttl_tokens: 60s` |
+
+### Como funciona
+
+1. **`anonymous_access`** — injeta `user_key: rhbk-anon-key` em todas as requests sem credenciais 3scale. Usada apenas para rate-limiting e tracking interno.
+2. **`token_introspection`** — valida o `Authorization: Bearer <JWT>` chamando `/realms/rhbk/protocol/openid-connect/token/introspect`. Se `{ "active": false }`, rejeita com `403`.
+3. **`apicast`** — processamento padrão com a user_key anônima.
+
+O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu Bearer token do Keycloak.
+
+### O que é GitOps e o que é manual
+
+**Via GitOps (Argo CD Application `3scale-echoapi`):**
+- `Product` com policy chain `anonymous_access` + `token_introspection` + `apicast`
+- `Application` anônima (`echoapi-application-rhbk-anon`) + `ApplicationAuth` com `user_key: rhbk-anon-key`
+- Routes `api-rhbk.example.com` e `api-rhbk-staging.example.com` (em `gitops/apicast-selfmanaged/apicast.yaml`)
+
+**Manual (ver `ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md`):**
+1. Executar `ProxyConfigPromote` para publicar staging → produção
+2. Reiniciar APIcast pods para carregar a nova configuração
+3. Testar com Bearer token do Keycloak via `curl --resolve`
+
+---
+
 ## Estrutura do repositório (manifestos)
 
 | Caminho | Descrição |
@@ -256,11 +293,16 @@ copie o secret gerado e substitua `change-me-zync-secret` no arquivo
 | `gitops/databases/redis-backend/redis.yaml` | Redis para Backend (storage + queues) em `3scale-databases` |
 | `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
 | `gitops/apimanager/apimanager.yaml` | APIManager CR (`wildcardDomain` + `externalComponents`) |
+| `gitops/apimanager/debug-log-hook.yaml` | PostSync Job para habilitar logs de debug no backend-listener e system-app |
 | `gitops/echoapi/echo-server.yaml` | Deploy do backend `echoapi` interno (ClusterIP) no namespace `echoapi-gitops` |
 | `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product` (user_key), `DeveloperAccount`, `DeveloperUser`, `Application` |
 | `gitops/echoapi/echoapi-product-oidc.yaml` | `Product` OIDC + Token Introspection e `Application` correspondente |
+| `gitops/echoapi/echoapi-product-rhbk-auth.yaml` | `Product` RHBK Auth (anonymous + token_introspection) e `Application` anônima |
+| `gitops/apicast-selfmanaged/apicast.yaml` | `APIcast` CRs (production + staging) + Routes para todos os produtos |
+| `gitops/apicast-selfmanaged/apicast-secret-init.yaml` | PreSync Job para popular o Secret `apicast-ha-portal-credentials` |
 | `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API (user_key) |
 | `ECHOAPI_OIDC_MANUAL_STEPS.md` | Passos manuais para Echo API OIDC: secret Zync, roles Keycloak, token e teste |
+| `ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md` | Passos manuais para Echo API RHBK Auth: ProxyConfigPromote e teste com Bearer token Keycloak |
 
 ## Observações
 
@@ -277,3 +319,140 @@ copie o secret gerado e substitua `change-me-zync-secret` no arquivo
 - Separar a instação do operador das bases para dividir as responsabilidades, facilitar a instalação e o entendimento;
 - Adicionar passos de "fork" para utilização e `contributing.md` para melhorias;
 - Adicionar documentação do ApplicationAuth
+
+---
+
+## Problemas Encontrados
+
+### P1 — APIcast Operator não instalando (OperatorGroup duplicado)
+
+**Problema:** Após adicionar a `Subscription` do operador APIcast junto à do operador 3scale (ambas no namespace `3scale-gitops`), o `InstallPlan` do APIcast nunca era aprovado e o operador não era instalado. O Argo CD não mostrava erro explícito no Application.
+
+**Identificação:**
+
+```bash
+oc -n 3scale-gitops get operatorgroup
+# Retornou: apicast-operator e 3scale-operator — dois OperatorGroups no mesmo namespace
+oc -n 3scale-gitops describe operatorgroup apicast-operator
+# Mensagem: "installs.operators.coreos.com "apicast-operator" is forbidden: only one OperatorGroup can exist per namespace"
+```
+
+O Kubernetes/OCP só permite **um** `OperatorGroup` por namespace. A presença de dois impedia o OLM de processar os `InstallPlan`s.
+
+**Solução:** Removido o `OperatorGroup` `apicast-operator` de `gitops/operator/operatorgroup.yaml`, mantendo apenas o `3scale-operator`. O `OperatorGroup` existente cobre ambos os operadores. O `OperatorGroup` duplicado foi removido manualmente do cluster e o `InstallPlan` do APIcast foi aprovado.
+
+---
+
+### P2 — Colisão de hostnames entre produtos no APIcast Self-Managed
+
+**Problema:** Após configurar os dois produtos (`echoapi-product` user_key e `echoapi-product-oidc`) para usar o mesmo APIcast Self-Managed (`api.example.com` / `api-staging.example.com`), ambos os produtos retornavam `403 Authentication failed`.
+
+**Identificação:**
+
+Os logs do APIcast revelaram:
+```
+skipping host api.example.com already defined by service 6
+```
+
+O APIcast só consegue rotear um hostname para **um** serviço. Como os dois produtos apontavam para os mesmos hostnames, o segundo serviço era ignorado. Todas as requisições eram roteadas para o primeiro serviço (id=2), cujas credenciais não coincidiam com as da requisição.
+
+**Solução:** Atribuídos hostnames distintos a cada produto:
+
+| Produto | Staging | Production |
+|---------|---------|-----------|
+| `echoapi-product` (user_key) | `api-staging.example.com` | `api.example.com` |
+| `echoapi-product-oidc` (OIDC) | `api-oidc-staging.example.com` | `api-oidc.example.com` |
+
+O `APIcast` CR cria Routes automaticamente somente para o seu `exposedHost`. Para o produto OIDC, foram criados Routes adicionais em `gitops/apicast-selfmanaged/apicast.yaml` apontando para os mesmos serviços (`apicast-apicast-ha-staging` e `apicast-apicast-ha-production`) com os novos hostnames. Os produtos foram re-promovidos via `ProxyConfigPromote`.
+
+---
+
+### P3 — `service_token_invalid` no backend para todos os serviços
+
+**Problema:** Mesmo após corrigir a colisão de hostnames, o backend retornava `403` com a mensagem `service token "..." or service id "6" is invalid` para todos os service tokens e todos os service IDs.
+
+**Identificação:**
+
+Verificação do Redis do backend (`backend-redis-external` no namespace `3scale-databases`):
+
+```bash
+oc -n 3scale-databases exec deployment/backend-redis-external -- \
+  redis-cli keys "service_token*"
+# Retornou: vazio — nenhuma chave service_token registrada
+oc -n 3scale-databases exec deployment/backend-redis-external -- \
+  redis-cli dbsize
+# Apenas 13 chaves — somente metadados de serviço, sem tokens
+```
+
+O Redis do backend só tinha chaves do tipo `service/id:X/state`, `service/id:X/provider_key` etc., mas nenhuma chave `service_token/*`. Os service tokens existiam corretamente no PostgreSQL (confirmado via Rails console: `Service.find(6).active_service_token`), mas nunca haviam sido sincronizados do banco relacional para o Redis do backend.
+
+A causa raiz foi o chamado deploy do proxy via `proxy/deploy.xml`, que re-promoveu as configurações mas não relançou o job de sincronização de service tokens. Tentativas de inserção direta via API interna do backend (`/internal/service_tokens/`) falharam com `500` por problema de serialização dos parâmetros.
+
+**Solução (contorno):** O problema foi mascarado pelo [P4](#p4--policy-token_introspection-no-produto-user_key). Após remover a policy incorreta (P4), os endpoints voltaram a funcionar. A investigação do Redis revelou que o backend estava funcional para serviços com `provider_key` (modo interno), mas o service_token sync pode ser forçado via:
+
+```bash
+# Force re-deploy do proxy (promove staging → produção e relança sync de backend)
+TOKEN=$(oc -n 3scale-gitops get secret system-seed \
+  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
+curl -sk -X POST \
+  "https://3scale-admin.<wildcardDomain>/admin/api/services/6/proxy/deploy.xml?access_token=${TOKEN}"
+```
+
+---
+
+### P4 — Policy `token_introspection` indevida no produto user_key causando 403
+
+**Problema:** O produto `echoapi-product` (autenticação por `user_key`) retornava `403 Authentication failed` mesmo com `user_key` correto na query string, após a correção da colisão de hosts.
+
+**Identificação:**
+
+Após habilitar `logLevel: debug` no APIcast CR (via GitOps), os logs revelaram a causa imediatamente:
+
+```
+[warn] token_introspection.lua:172: introspect_token(): failed to execute token introspection. status: 400
+[info] token_introspection.lua:204: token introspection for access token nil: token not active
+```
+
+A policy `token_introspection` estava configurada no `echoapi-product` (produto user_key). Esta policy espera um `Authorization: Bearer <JWT>` na requisição, mas requisições com `user_key` não carregam Bearer token. A policy tentava introspeccionar `access token nil` e rejeitava a requisição com 403.
+
+O arquivo `gitops/echoapi/3scale-capabilities.yaml` continha a policy `token_introspection` com `auth_type: client_id+client_secret` — copiada indevidamente do produto OIDC durante a criação do segundo produto.
+
+**Solução:** Removida a policy `token_introspection` do `echoapi-product` em `gitops/echoapi/3scale-capabilities.yaml`. O produto user_key manteve apenas as policies `default_credentials` e `apicast`. Após `oc apply` e `ProxyConfigPromote`, todos os 4 endpoints voltaram a retornar `200 OK`:
+
+```bash
+# user_key product
+curl --resolve "api-staging.example.com:80:<ROUTER_IP>" \
+  "http://api-staging.example.com/?user_key=change-me-user-key"   # → 200 OK
+curl --resolve "api.example.com:80:<ROUTER_IP>" \
+  "http://api.example.com/?user_key=change-me-user-key"            # → 200 OK
+
+# OIDC product
+TOKEN=$(curl ... /token | jq -r .access_token)
+curl --resolve "api-oidc-staging.example.com:80:<ROUTER_IP>" \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://api-oidc-staging.example.com/"                           # → 200 OK
+curl --resolve "api-oidc.example.com:80:<ROUTER_IP>" \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://api-oidc.example.com/"                                   # → 200 OK
+```
+
+**Lição aprendida:** A policy `token_introspection` deve ser usada **exclusivamente** em produtos com autenticação OIDC. Em produtos user_key ou api_key, use apenas `default_credentials` + `apicast`.
+
+---
+
+### Como habilitar logs de debug
+
+Os logs de debug são configurados via GitOps e aplicados ao cluster automaticamente:
+
+**APIcast** — configurado diretamente no CR (`gitops/apicast-selfmanaged/apicast.yaml`):
+```yaml
+spec:
+  logLevel: debug       # logs OpenResty/Lua
+  oidcLogLevel: debug   # logs OIDC/JWT (somente staging)
+```
+
+**backend-listener e backend-worker** — o APIManager operator não expõe campo de log level; o PostSync hook `gitops/apimanager/debug-log-hook.yaml` aplica `CONFIG_LOG_LEVEL=debug` e reinicia os pods após cada sync do Application `3scale-apimanager`.
+
+**system-app / sidekiq** — controlado pela chave `RAILS_LOG_LEVEL` no ConfigMap `system-environment` (gerenciado pelo operador). O mesmo PostSync hook atualiza este valor e reinicia os pods afetados.
+
+Para desabilitar: altere os valores para `info` nos arquivos GitOps e force um novo sync.
