@@ -64,9 +64,6 @@ oc apply -f gitops/echoapi/echoapi-product-rhbk-auth.yaml
 ### 3. Promover a configuração de staging para produção
 
 ```bash
-TOKEN=$(oc -n 3scale-gitops get secret system-seed \
-  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
-
 cat <<EOF | oc apply -f -
 apiVersion: capabilities.3scale.net/v1beta1
 kind: ProxyConfigPromote
@@ -205,3 +202,59 @@ oc -n 3scale-gitops describe proxyconfigpromote echoapi-product-rhbk-auth-promot
 ```
 
 Se a mensagem for `cannot promote to production as no product changes detected`, o produto não foi atualizado desde a última promoção. Force um re-sync do Argo CD ou faça uma alteração mínima no produto.
+
+---
+
+## Interagindo com a API do 3Scale
+
+### Token de acesso
+
+Antes de interagir com a API do 3Scale é necessário obter a URL e o `access token`:
+
+```bash
+ACCESS_TOKEN=$(oc -n 3scale-gitops get secret system-seed \
+  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
+
+ADMIN_URL="https://3scale-admin.$(oc get ingresscontroller -n openshift-ingress-operator \
+  -o jsonpath='{.items[0].status.domain}')"
+```
+
+### Listar todos os produtos (services)
+
+Utilize a chamada abaixo para listar todos os produtos, e obter o `SERVICE_ID`:
+
+```bash
+curl -s "${ADMIN_URL}/admin/api/services.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "import sys,json; [print(f\"ID: {s['service']['id']} | name: {s['service']['name']} | state: {s['service']['state']}\") for s in json.load(sys.stdin)['services']]"
+```
+
+*Importante:* Declare a variável `SEVICE_ID` com o ID obtido pelo comando acima (caso ocorra um erro, remova a linha do `python` para obter a resposta completa do 3scale).
+```bash
+SERVICE_ID=2
+```
+
+### Detalhes de um produto específico (por ID)
+
+```bash
+curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -m json.tool
+```
+
+### Versão publicada de um produto por ambiente
+
+```bash
+# Staging (sandbox)
+
+curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}/proxy/configs/sandbox/latest.json?access_token=${ACCESS_TOKEN}"   | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"version: {d['proxy_config']['version']}, env: {d['proxy_config']['environment']}\")"
+
+# Production
+curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}/proxy/configs/production/latest.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"version: {d['proxy_config']['version']}, env: {d['proxy_config']['environment']}\")"
+
+```
+
+#### 3Scale API Troubleshooting 
+
+`{"status":"Not found"}`: verifique o ID, ou no caso de `production`, verifique se o produto já foi promovido.
+
+`{"error":"Access denied"}`: verifique o `access_token`.
