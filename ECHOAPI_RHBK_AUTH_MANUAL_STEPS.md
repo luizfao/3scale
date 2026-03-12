@@ -7,11 +7,11 @@ Arquivo GitOps: `gitops/echoapi/echoapi-product-rhbk-auth.yaml`
 
 ## O que este produto faz
 
-Este produto implementa o padrão **Anonymous Access + OAuth 2.0 Token Introspection**:
+Este produto implementa o padrão **Default Credentials + OAuth 2.0 Token Introspection**:
 
 - O cliente envia **apenas** `Authorization: Bearer <token_keycloak>` — nenhuma `user_key` 3scale é necessária na chamada.
 - Qualquer usuário com conta válida no Keycloak (realm `rhbk`) pode usar a API, sem precisar ser cadastrado no 3scale.
-- A policy `anonymous_access` injeta uma `user_key` interna transparente (da aplicação `echoapi-application-rhbk-anon`), usada pelo 3scale apenas para rate-limiting e tracking.
+- A policy `default_credentials` injeta uma `user_key` interna transparente (da aplicação `echoapi-application-rhbk-anon`), usada pelo 3scale apenas para rate-limiting e tracking.
 - A policy `token_introspection` valida o Bearer JWT chamando o endpoint de introspeção do Keycloak. Se o token não for ativo (`"active": false`), a requisição é rejeitada com `403`.
 
 ### Diferença em relação aos outros produtos
@@ -84,7 +84,9 @@ oc -n 3scale-gitops get proxyconfigpromote echoapi-product-rhbk-auth-promote \
   -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' && echo
 ```
 
-### 4. Reiniciar os pods do APIcast para carregar a nova configuração
+### 4. (Opcional) Reiniciar os pods do APIcast
+
+O APIcast Self-Managed recarrega a configuração automaticamente via polling. O restart manual só é necessário se a nova configuração não aparecer após alguns minutos.
 
 ```bash
 oc -n 3scale-gitops rollout restart \
@@ -101,7 +103,9 @@ oc -n 3scale-gitops rollout status deployment/apicast-apicast-ha-staging --timeo
 ### Obter o IP do router OpenShift
 
 ```bash
-ROUTER_IP=$(dig +short echoapi-3scale-apicast-staging.apps.cluster-zrdcz.dynamic.redhatworkshops.io | head -1)
+ROUTER_IP=$(nslookup \
+  "$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')" \
+  | awk '/^Address/ && !/#/ {print $2}')
 echo "Router IP: ${ROUTER_IP}"
 ```
 

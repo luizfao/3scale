@@ -19,6 +19,13 @@ A integração com **SSO (RHBK/Keycloak)** é feita **depois** da instalação n
 
 ## Como usar (rápido)
 
+### Modos de implantação
+
+Este repositório suporta dois modos:
+
+- **1 cluster (simples):** todos os bootstrap files são aplicados no mesmo cluster, usando `3-application-apimanager.yaml`.
+- **2 clusters / HA ativo-passivo:** os mesmos bootstrap files são aplicados nos dois clusters, exceto o APIManager — o cluster primário usa `3-application-apimanager.yaml` e o cluster HA usa `3-application-ha-apimanager.yaml` (que aponta para `gitops/apimanager-ha/` com o `wildcardDomain` do cluster HA).
+
 ### Pré-requisitos
 
 - Cluster OpenShift com permissões de administrador
@@ -33,7 +40,8 @@ O `APIManager` usa `spec.wildcardDomain`, que deve ser o domínio base das rotas
 oc get ingresscontroller -n openshift-ingress-operator -o jsonpath='{.items[0].status.domain}'
 ```
 
-Edite `gitops/apimanager/apimanager.yaml` e substitua `spec.wildcardDomain: apps.example.com` pelo valor obtido.
+- Edite `gitops/apimanager/apimanager.yaml` e substitua `spec.wildcardDomain: apps.example.com` pelo valor obtido.
+- Se usar modo 2 clusters, edite também `gitops/apimanager-ha/apimanager-ha.yaml` com o domínio do cluster HA.
 
 ### 2) (Se o repositório for privado) Credenciais no Argo CD
 
@@ -59,32 +67,50 @@ stringData:
 EOF
 ```
 
-Ou use o exemplo em `bootstrap/repo-credentials-secret.example.yaml` (copie para `repo-credentials-secret.yaml`, preencha o token; o arquivo está no `.gitignore`).
+Ou use o exemplo em `bootstrap/0-repo-credentials-secret.example.yaml` (copie para `0-repo-credentials-secret.yaml`, preencha o token; o arquivo está no `.gitignore`).
 
-### 3) Ajustar a URL do repositório no Application
+### 3) Ajustar a URL do repositório nos Applications
 
-Edite `bootstrap/application.yaml` e substitua `repoURL: https://github.com/USER/3scale.git` pela URL real do seu repositório.
+Edite todos os arquivos em `bootstrap/` e substitua `repoURL: https://github.com/luizfao/3scale.git` pela URL real do seu repositório.
 
-### 4) Bootstrap do Argo CD (dois Applications, sem editar arquivos)
+### 4) Bootstrap do Argo CD
 
-São usados **dois** Applications: um para namespaces, operator, bancos e secrets; outro só para o APIManager (que depende do CRD criado pelo operador). Assim não é preciso alterar nenhum arquivo entre o primeiro e o segundo sync.
-
-Aplique os dois Applications de uma vez:
+São usados **5 Applications**, aplicados em ordem numérica. O operador 3scale precisa estar instalado antes de aplicar o APIManager (passo 5 abaixo).
 
 ```bash
-oc apply -f bootstrap/application.yaml
-oc apply -f bootstrap/application-apimanager.yaml
-oc apply -f bootstrap/application-echoapi.yaml
+# Cluster PRIMÁRIO (e único, se modo 1 cluster):
+oc apply -f bootstrap/1-application-operator.yaml
+# Aguardar a instalação do operador (passo 5) antes de continuar
+oc apply -f bootstrap/2-application-databases.yaml
+oc apply -f bootstrap/3-application-apimanager.yaml        # cluster primário
+oc apply -f bootstrap/4-application-apicast-selfmanaged.yaml
+oc apply -f bootstrap/5-application-echoapi.yaml
 ```
 
-- **Application `3scale`**: sincronize no Argo CD. Cria namespaces `3scale-gitops` e `3scale-databases`, operator (Subscription/OperatorGroup), bancos externos (PostgreSQL System + Redis) e secrets. O APIManager fica de fora (excluído neste Application).
-- **Application `3scale-apimanager`**: pode ficar em estado de falha até o CRD existir. **Não é preciso editá-lo** — depois que o operador estiver instalado (passo 5), basta sincronizar este Application no Argo CD.
+```bash
+# Cluster HA (modo 2 clusters) — mesmos passos, exceto o APIManager:
+oc apply -f bootstrap/1-application-operator.yaml
+# Aguardar a instalação do operador (passo 5) antes de continuar
+oc apply -f bootstrap/2-application-databases.yaml
+oc apply -f bootstrap/3-application-ha-apimanager.yaml     # cluster HA
+oc apply -f bootstrap/4-application-apicast-selfmanaged.yaml
+oc apply -f bootstrap/5-application-echoapi.yaml
+```
 
-### 5) Aprovar o Install Plan do operador (Manual) — depois sincronize o Application `3scale-apimanager`
+Applications criados:
 
-O CRD `APIManager` só existe depois que o operador 3scale (CSV) está instalado. **Depois do sync do Application `3scale`** (namespaces, operator, DBs), aprove o Install Plan. Quando o CSV estiver **Succeeded**, sincronize o Application **`3scale-apimanager`** no Argo CD para aplicar o APIManager (não é preciso alterar nenhum arquivo).
+| Application Argo CD | Arquivo bootstrap | Diretório GitOps |
+|---|---|---|
+| `3scale-operator` | `1-application-operator.yaml` | `gitops/operator/` |
+| `3scale-databases` | `2-application-databases.yaml` | `gitops/databases/` |
+| `3scale-apimanager` | `3-application-apimanager.yaml` | `gitops/apimanager/` |
+| `3scale-ha-apimanager` | `3-application-ha-apimanager.yaml` | `gitops/apimanager-ha/` |
+| `3scale-apicast-selfmanaged` | `4-application-apicast-selfmanaged.yaml` | `gitops/apicast-selfmanaged/` |
+| `3scale-echoapi` | `5-application-echoapi.yaml` | `gitops/echoapi/` |
 
-Liste e aprove o Install Plan:
+### 5) Aprovar o Install Plan do operador (Manual) — depois sincronize `3scale-apimanager`
+
+O CRD `APIManager` só existe depois que o operador 3scale (CSV) está instalado. **Depois do sync do Application `3scale-operator`**, aprove o Install Plan. Quando o CSV estiver **Succeeded**, sincronize o Application **`3scale-apimanager`** (ou `3scale-ha-apimanager` no cluster HA) no Argo CD.
 
 ```bash
 oc -n 3scale-gitops get installplans
@@ -125,6 +151,30 @@ oc -n 3scale-gitops get secret system-seed -o jsonpath='{.data.ADMIN_PASSWORD}' 
 oc -n 3scale-gitops get secret system-seed -o jsonpath='{.data.MASTER_USER}' | base64 -d; echo
 oc -n 3scale-gitops get secret system-seed -o jsonpath='{.data.MASTER_PASSWORD}' | base64 -d; echo
 ```
+
+### 8) Testar as APIs (APIcast Self-Managed)
+
+O APIcast Self-Managed usa hostnames customizados que precisam de `--resolve` para testes locais (não há DNS real apontando para eles). Obtenha o IP do router a partir da Route do console (presente em qualquer cluster OpenShift):
+
+```bash
+ROUTER_IP=$(nslookup \
+  "$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')" \
+  | awk '/^Address/ && !/#/ {print $2}')
+echo "Router IP: ${ROUTER_IP}"
+```
+
+Hostnames dos produtos:
+
+| Produto | Staging | Production |
+|---------|---------|-----------|
+| echoapi (user_key) | `api-staging.example.com` | `api.example.com` |
+| echoapi-oidc | `api-oidc-staging.example.com` | `api-oidc.example.com` |
+| echoapi-rhbk-auth | `api-rhbk-staging.example.com` | `api-rhbk.example.com` |
+
+Para os comandos de teste completos de cada produto, consulte:
+- `ECHOAPI_MANUAL_STEPS.md` — Echo API (user_key)
+- `ECHOAPI_OIDC_MANUAL_STEPS.md` — Echo API OIDC
+- `ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md` — Echo API RHBK Auth
 
 ## Integração SSO com RHBK (Keycloak em rhbk-gitops)
 
@@ -247,7 +297,7 @@ Terceiro produto, que implementa autenticação com qualquer usuário do Keycloa
 
 | Componente | Detalhes |
 |-----------|---------|
-| **Produto 3scale** | `echoapi-product-rhbk-auth` — autenticação user_key + policies `anonymous_access` + `token_introspection` |
+| **Produto 3scale** | `echoapi-product-rhbk-auth` — autenticação user_key + policies `default_credentials` + `token_introspection` |
 | **Backend** | Mesmo `echoapi-backend` (`http://echoapi.echoapi-gitops.svc.cluster.local:9292`) |
 | **IdP** | Keycloak `rhbk` realm (`rhbk-gitops`) |
 | **Client Keycloak** | `4d045da9` — reutilizado para chamar o endpoint de introspeção (nenhum client novo necessário) |
@@ -256,16 +306,16 @@ Terceiro produto, que implementa autenticação com qualquer usuário do Keycloa
 
 ### Como funciona
 
-1. **`anonymous_access`** — injeta `user_key: rhbk-anon-key` em todas as requests sem credenciais 3scale. Usada apenas para rate-limiting e tracking interno.
+1. **`default_credentials`** — injeta `user_key: rhbk-anon-key` em todas as requests sem credenciais 3scale. Usada apenas para rate-limiting e tracking interno. (`anonymous_access` não existe como policy builtin no APIcast 3scale 2.16; `default_credentials` tem comportamento equivalente.)
 2. **`token_introspection`** — valida o `Authorization: Bearer <JWT>` chamando `/realms/rhbk/protocol/openid-connect/token/introspect`. Se `{ "active": false }`, rejeita com `403`.
-3. **`apicast`** — processamento padrão com a user_key anônima.
+3. **`apicast`** — processamento padrão com a user_key injetada.
 
 O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu Bearer token do Keycloak.
 
 ### O que é GitOps e o que é manual
 
 **Via GitOps (Argo CD Application `3scale-echoapi`):**
-- `Product` com policy chain `anonymous_access` + `token_introspection` + `apicast`
+- `Product` com policy chain `default_credentials` + `token_introspection` + `apicast`
 - `Application` anônima (`echoapi-application-rhbk-anon`) + `ApplicationAuth` com `user_key: rhbk-anon-key`
 - Routes `api-rhbk.example.com` e `api-rhbk-staging.example.com` (em `gitops/apicast-selfmanaged/apicast.yaml`)
 
@@ -280,26 +330,32 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 
 | Caminho | Descrição |
 |--------|------------|
-| `bootstrap/application.yaml` | Argo CD Application `3scale` (monitora `gitops/`, exclui `apimanager/` e `echoapi/`) |
-| `bootstrap/application-apimanager.yaml` | Argo CD Application `3scale-apimanager` (monitora só `gitops/apimanager/`) |
-| `bootstrap/application-echoapi.yaml` | Argo CD Application `3scale-echoapi` (monitora só `gitops/echoapi/`) |
-| `bootstrap/repo-credentials-secret.example.yaml` | Exemplo de Secret para repositório privado |
-| `gitops/namespace.yaml` | Namespaces `3scale-gitops` e `3scale-databases` |
+| `bootstrap/0-repo-credentials-secret.example.yaml` | Exemplo de Secret para repositório privado (Argo CD) |
+| `bootstrap/1-application-operator.yaml` | Argo CD Application `3scale-operator` (monitora `gitops/operator/`) |
+| `bootstrap/2-application-databases.yaml` | Argo CD Application `3scale-databases` (monitora `gitops/databases/`) |
+| `bootstrap/3-application-apimanager.yaml` | Argo CD Application `3scale-apimanager` — cluster primário (`gitops/apimanager/`) |
+| `bootstrap/3-application-ha-apimanager.yaml` | Argo CD Application `3scale-ha-apimanager` — cluster HA (`gitops/apimanager-ha/`) |
+| `bootstrap/4-application-apicast-selfmanaged.yaml` | Argo CD Application `3scale-apicast-selfmanaged` (`gitops/apicast-selfmanaged/`) |
+| `bootstrap/5-application-echoapi.yaml` | Argo CD Application `3scale-echoapi` (`gitops/echoapi/`) |
+| `gitops/operator/namespace.yaml` | Namespace `3scale-gitops` |
 | `gitops/operator/operatorgroup.yaml` | OperatorGroup (operador no namespace) |
-| `gitops/operator/subscription.yaml` | Subscription 3scale Operator 2.16 (Manual) |
+| `gitops/operator/subscription.yaml` | Subscription 3scale Operator 2.16 (aprovação Manual) |
+| `gitops/databases/namespace.yaml` | Namespace `3scale-databases` |
 | `gitops/databases/postgresql-system/postgresql.yaml` | PostgreSQL para System (`system_production`) em `3scale-databases` |
-| `gitops/databases/redis-common/redis-config.yaml` | ConfigMap `redis-config-external` (alinhado ao guia de migração do 3scale) |
+| `gitops/databases/redis-common/redis-config.yaml` | ConfigMap `redis-config-external` com persistência habilitada (`appendonly`, `save`) |
 | `gitops/databases/redis-system/redis.yaml` | Redis para System (Sidekiq) em `3scale-databases` |
 | `gitops/databases/redis-backend/redis.yaml` | Redis para Backend (storage + queues) em `3scale-databases` |
 | `gitops/databases/3scale-secrets.yaml` | Secrets `system-database`, `system-redis`, `backend-redis` para o operador |
-| `gitops/apimanager/apimanager.yaml` | APIManager CR (`wildcardDomain` + `externalComponents`) |
+| `gitops/apimanager/apimanager.yaml` | APIManager CR — cluster primário (`wildcardDomain` + `externalComponents`) |
 | `gitops/apimanager/debug-log-hook.yaml` | PostSync Job para habilitar logs de debug no backend-listener e system-app |
+| `gitops/apimanager-ha/apimanager-ha.yaml` | APIManager CR — cluster HA (mesmo conteúdo, `wildcardDomain` diferente) |
+| `gitops/apicast-selfmanaged/apicast.yaml` | `APIcast` CRs (production + staging) + Routes para todos os produtos |
+| `gitops/apicast-selfmanaged/apicast-secret-init.yaml` | PreSync Job para popular o Secret `apicast-ha-portal-credentials` |
+| `gitops/echoapi/namespace.yaml` | Namespace `echoapi-gitops` |
 | `gitops/echoapi/echo-server.yaml` | Deploy do backend `echoapi` interno (ClusterIP) no namespace `echoapi-gitops` |
 | `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product` (user_key), `DeveloperAccount`, `DeveloperUser`, `Application` |
 | `gitops/echoapi/echoapi-product-oidc.yaml` | `Product` OIDC + Token Introspection e `Application` correspondente |
-| `gitops/echoapi/echoapi-product-rhbk-auth.yaml` | `Product` RHBK Auth (anonymous + token_introspection) e `Application` anônima |
-| `gitops/apicast-selfmanaged/apicast.yaml` | `APIcast` CRs (production + staging) + Routes para todos os produtos |
-| `gitops/apicast-selfmanaged/apicast-secret-init.yaml` | PreSync Job para popular o Secret `apicast-ha-portal-credentials` |
+| `gitops/echoapi/echoapi-product-rhbk-auth.yaml` | `Product` RHBK Auth (`default_credentials` + `token_introspection`) e `Application` anônima |
 | `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API (user_key) |
 | `ECHOAPI_OIDC_MANUAL_STEPS.md` | Passos manuais para Echo API OIDC: secret Zync, roles Keycloak, token e teste |
 | `ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md` | Passos manuais para Echo API RHBK Auth: ProxyConfigPromote e teste com Bearer token Keycloak |
@@ -315,10 +371,7 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 
 ## Melhorias
 
-- Adicionar resumo na introdução, detalhes e link para o `ECHOAPI_MANUAL_STEPS.md` nos passos de execução para deixar claro o papel do echoapi;
-- Separar a instação do operador das bases para dividir as responsabilidades, facilitar a instalação e o entendimento;
 - Adicionar passos de "fork" para utilização e `contributing.md` para melhorias;
-- Adicionar documentação do ApplicationAuth
 
 ---
 

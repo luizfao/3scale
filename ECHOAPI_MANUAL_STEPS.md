@@ -5,7 +5,7 @@ Este arquivo cobre os passos operacionais que nao sao ideais para reconciliacao 
 ## 1) Aplicar o Application do Echo API
 
 ```bash
-oc apply -f bootstrap/application-echoapi.yaml
+oc apply -f bootstrap/5-application-echoapi.yaml
 ```
 
 No Argo CD, sincronize o app `3scale-echoapi`.
@@ -84,54 +84,39 @@ oc -n 3scale-gitops get secret echoapi-product-appauth \
   -o jsonpath='{.data.UserKey}' | base64 -d; echo
 ```
 
-<!--
-## 5) Descobrir endpoint publico e testar chamada externa
-
-O endpoint publico do produto e exibido no 3scale Admin Portal:
-
-- Products -> Echo API -> Integration -> Configuration
-- copie a URL de staging ou production
-
-Com a URL e uma chave de app (por exemplo `user_key`), teste:
-
-```bash
-curl -i "https://<public-echoapi-url>/?user_key=<USER_KEY>"
-```
-
-Se seu produto estiver em `app_id/app_key`, ajuste os parametros:
-
-```bash
-curl -i "https://<public-echoapi-url>/?app_id=<APP_ID>&app_key=<APP_KEY>"
-```
-
--->
-
 ## 5) Testar chamada externa
 
-O produto `Echo API` usa a policy `token_introspection` combinada com `default_credentials`.
-O caller precisa apenas de um Bearer JWT válido do Keycloak — o `user_key` é injetado
-automaticamente pelo APIcast via a policy `default_credentials`.
+O produto `Echo API` usa autenticação por `user_key`. Passe a chave via query string `?user_key=`.
 
-### Obter um Bearer Token (client credentials do client configurado)
+### Obter o IP do router OpenShift
 
 ```bash
-CLIENT_ID="" # TODO: obter client_id
-CLIENT_SECRET="" # TODO: obter client_secret
-KC_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+ROUTER_IP=$(nslookup \
+  "$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')" \
+  | awk '/^Address/ && !/#/ {print $2}')
+echo "Router IP: ${ROUTER_IP}"
+```
 
-TOKEN=$(curl -s -X POST "${KC_URL}/realms/rhbk/protocol/openid-connect/token" \
-  -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+### Ler a user_key do Secret GitOps
+
+```bash
+USER_KEY=$(oc -n 3scale-gitops get secret echoapi-product-appauth \
+  -o jsonpath='{.data.UserKey}' | base64 -d)
+echo "User Key: ${USER_KEY}"
 ```
 
 ### Testar nos 2 endpoints
 
 ```bash
 # Staging
-curl -i -H "Authorization: Bearer ${TOKEN}" \
-  "https://echoapi-3scale-apicast-staging.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+curl -s --resolve "api-staging.example.com:80:${ROUTER_IP}" \
+  "http://api-staging.example.com/?user_key=${USER_KEY}" \
+  -w "\nHTTP: %{http_code}\n"
 
 # Production
-curl -i -H "Authorization: Bearer ${TOKEN}" \
-  "https://echoapi-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+curl -s --resolve "api.example.com:80:${ROUTER_IP}" \
+  "http://api.example.com/?user_key=${USER_KEY}" \
+  -w "\nHTTP: %{http_code}\n"
 ```
+
+Resposta esperada: **HTTP 200** com o corpo JSON do Echo API.

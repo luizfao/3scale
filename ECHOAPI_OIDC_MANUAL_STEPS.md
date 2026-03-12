@@ -252,15 +252,29 @@ echo "TOKEN=${TOKEN}"
 
 ## 8) Testar o Echo API OIDC via APIcast
 
+### Obter o IP do router OpenShift
+
+```bash
+ROUTER_IP=$(nslookup \
+  "$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')" \
+  | awk '/^Address/ && !/#/ {print $2}')
+echo "Router IP: ${ROUTER_IP}"
+```
+
+### Testar nos 2 endpoints
+
 ```bash
 # Staging
-curl -v -H "Authorization: Bearer ${TOKEN}" \
-  "https://echoapi-oidc-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
+curl -s --resolve "api-oidc-staging.example.com:80:${ROUTER_IP}" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "http://api-oidc-staging.example.com/" \
+  -w "\nHTTP: %{http_code}\n"
 
-# Produção (após ProxyConfigPromote)
-curl -v -H "Authorization: Bearer ${TOKEN}" \
-  "https://echoapi-oidc-3scale-apicast-production.apps.cluster-zrdcz.dynamic.redhatworkshops.io/"
-  
+# Production
+curl -s --resolve "api-oidc.example.com:80:${ROUTER_IP}" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "http://api-oidc.example.com/" \
+  -w "\nHTTP: %{http_code}\n"
 ```
 
 Resposta esperada do echoapi (200 OK com JSON do request):
