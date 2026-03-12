@@ -39,9 +39,9 @@ Este produto implementa o padrão **Anonymous Access + OAuth 2.0 Token Introspec
 
 ```bash
 oc -n 3scale-gitops get product echoapi-product-rhbk-auth \
-  -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' && echo
+  -o jsonpath='{.status.conditions[?(@.type=="Synced")].status}' && echo
 
-oc -n 3scale-gitops get application echoapi-application-rhbk-anon \
+oc -n 3scale-gitops get application.capabilities.3scale.net echoapi-application-rhbk-anon \
   -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' && echo
 ```
 
@@ -201,23 +201,3 @@ oc -n 3scale-gitops describe proxyconfigpromote echoapi-product-rhbk-auth-promot
 ```
 
 Se a mensagem for `cannot promote to production as no product changes detected`, o produto não foi atualizado desde a última promoção. Force um re-sync do Argo CD ou faça uma alteração mínima no produto.
-
-<!-- ### ApplicationAuth com `ApplicationKey limit reached`
-
-O 3scale permite no máximo 5 chaves por aplicação. Para resetar:
-
-```bash
-TOKEN_ADMIN=$(oc -n 3scale-gitops get secret system-seed \
-  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
-ADMIN_URL="https://3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
-
-# Listar aplicações para encontrar o ID da echoapi-application-rhbk-anon
-curl -sk "${ADMIN_URL}/admin/api/applications.json?access_token=${TOKEN_ADMIN}" \
-  | python3 -c "
-import sys, json
-apps = json.load(sys.stdin)['applications']
-for a in apps:
-    app = a['application']
-    print(f\"id={app['id']} name={app['name']} keys={app.get('keys', [])}\")
-"
-``` -->
