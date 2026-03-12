@@ -20,7 +20,7 @@ metadata:
     # possa ser instalado (e o Install Plan aprovado) antes de aplicar o CR.
     argocd.argoproj.io/sync-wave: "5"
 spec:
-  wildcardDomain: apps.cluster-z7rk2.dynamic.redhatworkshops.io
+  wildcardDomain: apps.cluster-4bhms.dynamic.redhatworkshops.io
   # 2.16 requires external System DB + Redis; Zync DB is kept internal (operator-managed).
   externalComponents:
     backend:
