@@ -367,9 +367,9 @@ O `APIcast` CR cria Routes automaticamente somente para o seu `exposedHost`. Par
 
 ---
 
-### P3 — `service_token_invalid` no backend para todos os serviços
+### P3 — Erro `403 Forbidden` Authentication failed para todos os serviços
 
-**Problema:** Mesmo após corrigir a colisão de hostnames, o backend retornava `403` com a mensagem `service token "..." or service id "6" is invalid` para todos os service tokens e todos os service IDs.
+**Problema:** Mesmo após corrigir a colisão de hostnames, o backend retornava `403` com a mensagem `service token "..." is invalid` para todos os service tokens e todos os service IDs. O problema estava sendo causado toda vez que o cluster reiniciava, mais especificamente as pods do `backend-redis`.
 
 **Identificação:**
 
@@ -379,64 +379,26 @@ Verificação do Redis do backend (`backend-redis-external` no namespace `3scale
 oc -n 3scale-databases exec deployment/backend-redis-external -- \
   redis-cli keys "service_token*"
 # Retornou: vazio — nenhuma chave service_token registrada
-oc -n 3scale-databases exec deployment/backend-redis-external -- \
-  redis-cli dbsize
-# Apenas 13 chaves — somente metadados de serviço, sem tokens
 ```
 
 O Redis do backend só tinha chaves do tipo `service/id:X/state`, `service/id:X/provider_key` etc., mas nenhuma chave `service_token/*`. Os service tokens existiam corretamente no PostgreSQL (confirmado via Rails console: `Service.find(6).active_service_token`), mas nunca haviam sido sincronizados do banco relacional para o Redis do backend.
 
-A causa raiz foi o chamado deploy do proxy via `proxy/deploy.xml`, que re-promoveu as configurações mas não relançou o job de sincronização de service tokens. Tentativas de inserção direta via API interna do backend (`/internal/service_tokens/`) falharam com `500` por problema de serialização dos parâmetros.
-
-**Solução (contorno):** O problema foi mascarado pelo [P4](#p4--policy-token_introspection-no-produto-user_key). Após remover a policy incorreta (P4), os endpoints voltaram a funcionar. A investigação do Redis revelou que o backend estava funcional para serviços com `provider_key` (modo interno), mas o service_token sync pode ser forçado via:
+**Solução:** Executamos os passos da solution (3443351)[https://access.redhat.com/solutions/3443351] para forçar o sync.
 
 ```bash
-# Force re-deploy do proxy (promove staging → produção e relança sync de backend)
-TOKEN=$(oc -n 3scale-gitops get secret system-seed \
-  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
-curl -sk -X POST \
-  "https://3scale-admin.<wildcardDomain>/admin/api/services/6/proxy/deploy.xml?access_token=${TOKEN}"
+oc -n 3scale-gitops exec -it deployment/system-app -- bash -c 'bundle exec rake backend:storage:rewrite'
+
+oc -n 3scale-gitops rollout restart deployment/system-app
 ```
 
----
+Isso fez com que as transações voltassem a funcionar, porém não corrigia a causa raiz do problema, que limpava o redis após o restart, a solução foi corrigir as configurações no `ConfigMap` `redis-config.yaml`:
 
-### P4 — Policy `token_introspection` indevida no produto user_key causando 403
-
-**Problema:** O produto `echoapi-product` (autenticação por `user_key`) retornava `403 Authentication failed` mesmo com `user_key` correto na query string, após a correção da colisão de hosts.
-
-**Identificação:**
-
-Após habilitar `logLevel: debug` no APIcast CR (via GitOps), os logs revelaram a causa imediatamente:
-
-```
-[warn] token_introspection.lua:172: introspect_token(): failed to execute token introspection. status: 400
-[info] token_introspection.lua:204: token introspection for access token nil: token not active
-```
-
-A policy `token_introspection` estava configurada no `echoapi-product` (produto user_key). Esta policy espera um `Authorization: Bearer <JWT>` na requisição, mas requisições com `user_key` não carregam Bearer token. A policy tentava introspeccionar `access token nil` e rejeitava a requisição com 403.
-
-O arquivo `gitops/echoapi/3scale-capabilities.yaml` continha a policy `token_introspection` com `auth_type: client_id+client_secret` — copiada indevidamente do produto OIDC durante a criação do segundo produto.
-
-**Solução:** Removida a policy `token_introspection` do `echoapi-product` em `gitops/echoapi/3scale-capabilities.yaml`. O produto user_key manteve apenas as policies `default_credentials` e `apicast`. Após `oc apply` e `ProxyConfigPromote`, todos os 4 endpoints voltaram a retornar `200 OK`:
-
-```bash
-# user_key product
-curl --resolve "api-staging.example.com:80:<ROUTER_IP>" \
-  "http://api-staging.example.com/?user_key=change-me-user-key"   # → 200 OK
-curl --resolve "api.example.com:80:<ROUTER_IP>" \
-  "http://api.example.com/?user_key=change-me-user-key"            # → 200 OK
-
-# OIDC product
-TOKEN=$(curl ... /token | jq -r .access_token)
-curl --resolve "api-oidc-staging.example.com:80:<ROUTER_IP>" \
-  -H "Authorization: Bearer $TOKEN" \
-  "http://api-oidc-staging.example.com/"                           # → 200 OK
-curl --resolve "api-oidc.example.com:80:<ROUTER_IP>" \
-  -H "Authorization: Bearer $TOKEN" \
-  "http://api-oidc.example.com/"                                   # → 200 OK
-```
-
-**Lição aprendida:** A policy `token_introspection` deve ser usada **exclusivamente** em produtos com autenticação OIDC. Em produtos user_key ou api_key, use apenas `default_credentials` + `apicast`.
+| De | Para |
+|---------|---------|
+| save "" | save 900 1 |
+|         | save 300 10 |
+|         | save 60 10000 |
+| appendonly no | appendonly yes |
 
 ---
 
