@@ -324,8 +324,6 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 2. Reiniciar APIcast pods para carregar a nova configuração
 3. Testar com Bearer token do Keycloak via `curl --resolve`
 
----
-
 ## Estrutura do repositório (manifestos)
 
 | Caminho | Descrição |
@@ -368,6 +366,76 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 - **Persistent volumes**: PostgreSQL usa StatefulSet+PVC RWO; Redis externo segue o padrão do guia de migração do 3scale (Deployment + PVC + ConfigMap `redis-config-external`) com `storageClassName: ocs-external-storagecluster-cephfs`.
 - **Canal do operador**: `threescale-2.16`. Confirme no OperatorHub do cluster o nome do pacote e do canal se houver diferença.
 - **Repositório Keycloak**: para implantar ou ajustar o RHBK usado no SSO (Admin, Developer Portal e APIs), use o repositório [keycloak](https://github.com/luizfao/keycloak) e o namespace `rhbk-gitops`.
+
+---
+
+## Interagindo com a API do 3Scale
+
+### Token de acesso
+
+Antes de interagir com a API do 3Scale é necessário obter a URL e o `access token`:
+
+```bash
+ACCESS_TOKEN=$(oc -n 3scale-gitops get secret system-seed \
+  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
+
+ADMIN_URL="https://3scale-admin.$(oc get ingresscontroller -n openshift-ingress-operator \
+  -o jsonpath='{.items[0].status.domain}')"
+```
+
+### Listar todos os produtos (services)
+
+Utilize a chamada abaixo para listar todos os produtos, e obter o `SERVICE_ID`:
+
+```bash
+curl -s "${ADMIN_URL}/admin/api/services.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "import sys,json; [print(f\"ID: {s['service']['id']} | name: {s['service']['name']} | state: {s['service']['state']}\") for s in json.load(sys.stdin)['services']]"
+```
+
+*Importante:* Declare a variável `SEVICE_ID` com o ID obtido pelo comando acima (caso ocorra um erro, remova a linha do `python` para obter a resposta completa do 3scale).
+```bash
+SERVICE_ID=2
+```
+
+### Detalhes de um produto específico (por ID)
+
+```bash
+curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -m json.tool
+```
+
+### Versão publicada de um produto por ambiente
+
+```bash
+# Staging (sandbox)
+
+curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}/proxy/configs/sandbox/latest.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"version: {d['proxy_config']['version']}, env: {d['proxy_config']['environment']}\") "
+
+# Production
+curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}/proxy/configs/production/latest.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"version: {d['proxy_config']['version']}, env: {d['proxy_config']['environment']}\") "
+
+```
+
+### Obter todas as chaves das aplicações:
+
+```bash
+curl -s "${ADMIN_URL}/admin/api/applications.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "
+import sys, json
+apps = json.load(sys.stdin)['applications']
+for a in apps:
+    app = a['application']
+    print(f\"id:            {app['id']}\")
+    print(f\"name:          {app['name']}\")
+    print(f\"user_key:      {app.get('user_key', 'N/A')}\")
+    print(f\"client_id:     {app.get('client_id', 'N/A')}\")
+    print(f\"client_secret: {app.get('client_secret', 'N/A')}\")
+    print(f\"---\") "
+```
+
+---
 
 ## Melhorias
 

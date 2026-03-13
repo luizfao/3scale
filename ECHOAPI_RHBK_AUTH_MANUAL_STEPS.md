@@ -106,14 +106,46 @@ ROUTER_IP=$(nslookup \
 echo "Router IP: ${ROUTER_IP}"
 ```
 
+### Obter o `CLIENT_ID` e `CLIENT_SECRET` gerado pelo 3Scale na criação do produto
+
+```bash
+TOKEN=$(oc -n 3scale-gitops get secret system-seed \
+  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
+ADMIN_URL="https://3scale-admin.$(oc get ingresscontroller \
+  -n openshift-ingress-operator -o jsonpath='{.items[0].status.domain}')"
+
+curl -s "${ADMIN_URL}/admin/api/applications.json?access_token=${TOKEN}" \
+  | python3 -c "
+import sys, json
+apps = json.load(sys.stdin)['applications']
+for a in apps:
+    app = a['application']
+    if 'OIDC' in app.get('name',''):
+        print(f\"name:          {app['name']}\")
+        print(f\"client_id:     {app.get('client_id', 'N/A')}\")
+        print(f\"client_secret: {app.get('client_secret', 'N/A')}\")"
+```
+
+Para produtos OIDC, o `client_id` e `client_secret` são os mesmos que o Zync registra automaticamente no Keycloak. Se retornarem N/A, é porque o Zync ainda não sincronizou — verifique os logs do Zync: 
+
+```bash
+oc -n 3scale-gitops logs deployment/zync-que --tail=50
+``` 
+
+Salvar o `CLIENT_ID` e `CLIENT_SECRET` em uma variável para utilizar nos próximos comandos:
+```bash
+CLIENT_ID=client_id
+CLIENT_SECRET=client_secret
+``` 
+
 ### Obter um Bearer token do Keycloak (qualquer usuário do realm)
 
 **Opção A — Client Credentials (service account):**
 
 ```bash
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
-CLIENT_ID="4d045da9"
-CLIENT_SECRET="a3de2050e258e641f8aa643b2a39ffb6" #notsecret - test data
+#CLIENT_ID= # Obtido no comando anterior
+#CLIENT_SECRET= # Obtido no comando anterior
 
 TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/rhbk/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
@@ -127,8 +159,8 @@ echo "Token obtido: $([ -n "$TOKEN" ] && echo 'OK' || echo 'FALHOU')"
 
 ```bash
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
-CLIENT_ID="4d045da9"
-CLIENT_SECRET="a3de2050e258e641f8aa643b2a39ffb6" #notsecret - test data
+#CLIENT_ID= # Obtido no comando anterior
+#CLIENT_SECRET= # Obtido no comando anterior
 
 TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/rhbk/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
@@ -204,57 +236,3 @@ oc -n 3scale-gitops describe proxyconfigpromote echoapi-product-rhbk-auth-promot
 Se a mensagem for `cannot promote to production as no product changes detected`, o produto não foi atualizado desde a última promoção. Force um re-sync do Argo CD ou faça uma alteração mínima no produto.
 
 ---
-
-## Interagindo com a API do 3Scale
-
-### Token de acesso
-
-Antes de interagir com a API do 3Scale é necessário obter a URL e o `access token`:
-
-```bash
-ACCESS_TOKEN=$(oc -n 3scale-gitops get secret system-seed \
-  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
-
-ADMIN_URL="https://3scale-admin.$(oc get ingresscontroller -n openshift-ingress-operator \
-  -o jsonpath='{.items[0].status.domain}')"
-```
-
-### Listar todos os produtos (services)
-
-Utilize a chamada abaixo para listar todos os produtos, e obter o `SERVICE_ID`:
-
-```bash
-curl -s "${ADMIN_URL}/admin/api/services.json?access_token=${ACCESS_TOKEN}" \
-  | python3 -c "import sys,json; [print(f\"ID: {s['service']['id']} | name: {s['service']['name']} | state: {s['service']['state']}\") for s in json.load(sys.stdin)['services']]"
-```
-
-*Importante:* Declare a variável `SEVICE_ID` com o ID obtido pelo comando acima (caso ocorra um erro, remova a linha do `python` para obter a resposta completa do 3scale).
-```bash
-SERVICE_ID=2
-```
-
-### Detalhes de um produto específico (por ID)
-
-```bash
-curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}.json?access_token=${ACCESS_TOKEN}" \
-  | python3 -m json.tool
-```
-
-### Versão publicada de um produto por ambiente
-
-```bash
-# Staging (sandbox)
-
-curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}/proxy/configs/sandbox/latest.json?access_token=${ACCESS_TOKEN}"   | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"version: {d['proxy_config']['version']}, env: {d['proxy_config']['environment']}\")"
-
-# Production
-curl -s "${ADMIN_URL}/admin/api/services/${SERVICE_ID}/proxy/configs/production/latest.json?access_token=${ACCESS_TOKEN}" \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"version: {d['proxy_config']['version']}, env: {d['proxy_config']['environment']}\")"
-
-```
-
-#### 3Scale API Troubleshooting 
-
-`{"status":"Not found"}`: verifique o ID, ou no caso de `production`, verifique se o produto já foi promovido.
-
-`{"error":"Access denied"}`: verifique o `access_token`.
