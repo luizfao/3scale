@@ -200,6 +200,37 @@ O `ApplicationAuth` não é compatível com produtos OIDC. As credenciais devem 
 obtidas diretamente no Admin Portal do 3scale após o Zync sincronizar a aplicação
 com o Keycloak.
 
+**Via API do 3scale:**
+```bash
+ACCESS_TOKEN=$(oc -n 3scale-gitops get secret system-seed \
+  -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
+ADMIN_URL="https://3scale-admin.$(oc get ingresscontroller \
+  -n openshift-ingress-operator -o jsonpath='{.items[0].status.domain}')"
+
+curl -s "${ADMIN_URL}/admin/api/applications.json?access_token=${ACCESS_TOKEN}" \
+  | python3 -c "
+import sys, json
+apps = json.load(sys.stdin)['applications']
+for a in apps:
+    app = a['application']
+    if 'OIDC' in app.get('name',''):
+        print(f\"name:          {app['name']}\")
+        print(f\"client_id:     {app.get('client_id', 'N/A')}\")
+        print(f\"client_secret: {app.get('client_secret', 'N/A')}\")"
+```
+
+Para produtos OIDC, o `client_id` e `client_secret` são os mesmos que o Zync registra automaticamente no Keycloak. Se retornarem N/A, é porque o Zync ainda não sincronizou — verifique os logs do Zync: 
+
+```bash
+oc -n 3scale-gitops logs deployment/zync-que --tail=50
+``` 
+
+Salvar o `CLIENT_ID` e `CLIENT_SECRET` em uma variável para utilizar nos próximos comandos:
+```bash
+CLIENT_ID=client_id
+CLIENT_SECRET=client_secret
+``` 
+
 **Via Admin Portal do 3scale:**
 1. Acesse: `https://3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
 2. Vá em **Audience** → **Accounts** → `Echo API Org` → **Applications**
@@ -207,8 +238,9 @@ com o Keycloak.
 4. Anote o **Client ID** e o **Client Secret** mostrados em **API Credentials**
 
 **Via Admin Portal do Keycloak (confirmar):**
-1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/rhbk/console/`
+1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/master/console/#/rhbk`
 2. Vá em **Clients** — procure pelo client_id obtido no passo anterior
+3. Vá em **Credentials** — clique no botão para revelar a secret para confirmar
 
 Opcional: armazenar as credenciais no cluster para uso em scripts:
 

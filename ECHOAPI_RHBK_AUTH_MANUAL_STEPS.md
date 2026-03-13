@@ -97,7 +97,7 @@ oc -n 3scale-gitops rollout status deployment/apicast-apicast-ha-staging --timeo
 
 ## Testando a API
 
-### Obter o IP do router OpenShift
+### 1.Obter o IP do router OpenShift
 
 ```bash
 ROUTER_IP=$(nslookup \
@@ -106,15 +106,21 @@ ROUTER_IP=$(nslookup \
 echo "Router IP: ${ROUTER_IP}"
 ```
 
-### Obter o `CLIENT_ID` e `CLIENT_SECRET` gerado pelo 3Scale na criação do produto
+### 2.Obter um `CLIENT_ID` e `CLIENT_SECRET` do RHBK
 
+**Via Admin Portal do Keycloak:**
+1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/master/console/#/rhbk`
+2. Vá em **Clients** — procure por um client
+3. Vá em **Credentials** — clique no botão para revelar a secret para confirmar
+
+**Via API do 3scale utilizando de um produto OIDC criado anteriormente**
 ```bash
-TOKEN=$(oc -n 3scale-gitops get secret system-seed \
+ACCESS_TOKEN=$(oc -n 3scale-gitops get secret system-seed \
   -o jsonpath='{.data.ADMIN_ACCESS_TOKEN}' | base64 -d)
 ADMIN_URL="https://3scale-admin.$(oc get ingresscontroller \
   -n openshift-ingress-operator -o jsonpath='{.items[0].status.domain}')"
 
-curl -s "${ADMIN_URL}/admin/api/applications.json?access_token=${TOKEN}" \
+curl -s "${ADMIN_URL}/admin/api/applications.json?access_token=${ACCESS_TOKEN}" \
   | python3 -c "
 import sys, json
 apps = json.load(sys.stdin)['applications']
@@ -126,28 +132,23 @@ for a in apps:
         print(f\"client_secret: {app.get('client_secret', 'N/A')}\")"
 ```
 
-Para produtos OIDC, o `client_id` e `client_secret` são os mesmos que o Zync registra automaticamente no Keycloak. Se retornarem N/A, é porque o Zync ainda não sincronizou — verifique os logs do Zync: 
-
-```bash
-oc -n 3scale-gitops logs deployment/zync-que --tail=50
-``` 
-
 Salvar o `CLIENT_ID` e `CLIENT_SECRET` em uma variável para utilizar nos próximos comandos:
 ```bash
 CLIENT_ID=client_id
 CLIENT_SECRET=client_secret
 ``` 
 
-### Obter um Bearer token do Keycloak (qualquer usuário do realm)
+### 3.Obter um Bearer token do Keycloak (qualquer usuário do realm)
 
 **Opção A — Client Credentials (service account):**
 
 ```bash
 KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+REALM=rhbk
 #CLIENT_ID= # Obtido no comando anterior
 #CLIENT_SECRET= # Obtido no comando anterior
 
-TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/rhbk/protocol/openid-connect/token" \
+TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
@@ -170,7 +171,7 @@ TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/rhbk/protocol/openid-connect/tok
 
 > **Nota:** Para usar o fluxo de Resource Owner Password, o client precisa ter `directAccessGrantsEnabled: true` no Keycloak.
 
-### Testar via staging
+### 4.Testar via staging
 
 ```bash
 curl -s --resolve "api-rhbk-staging.example.com:80:${ROUTER_IP}" \
@@ -181,7 +182,7 @@ curl -s --resolve "api-rhbk-staging.example.com:80:${ROUTER_IP}" \
 
 Esperado: **HTTP 200** com o corpo JSON do Echo API.
 
-### Testar via produção
+### 5.Testar via produção
 
 ```bash
 curl -s --resolve "api-rhbk.example.com:80:${ROUTER_IP}" \
