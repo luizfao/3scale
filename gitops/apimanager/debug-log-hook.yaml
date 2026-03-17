@@ -33,7 +33,7 @@ metadata:
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "patch"]
+    verbs: ["get", "list", "watch", "patch"]
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "patch"]
@@ -81,6 +81,15 @@ spec:
               set -e
 
               LOG_LEVEL="${DEBUG_LOG_LEVEL:-debug}"
+
+              # Verifica se os deployments do 3scale já existem.
+              # No primeiro sync (logo após aprovação do InstallPlan) o APIManager ainda
+              # pode estar criando os deployments. Nesse caso o job encerra com sucesso
+              # e será re-executado no próximo sync.
+              if ! oc -n 3scale-gitops get deployment/backend-listener &>/dev/null; then
+                echo "backend-listener ainda não existe — APIManager em provisionamento. Encerrando sem erro."
+                exit 0
+              fi
 
               echo "=== Patching backend-listener: CONFIG_LOG_LEVEL=${LOG_LEVEL} ==="
               oc -n 3scale-gitops patch deployment/backend-listener --type=json \
