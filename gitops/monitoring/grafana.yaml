@@ -29,8 +29,7 @@ spec:
     security:
       admin_user: admin
       admin_password: change-me-grafana-password   # altere antes de usar em produção
-  serviceAccount:
-    annotations: {}
+  serviceAccount: {}
     # O Grafana Operator cria seu próprio SA; usamos grafana-serviceaccount via
     # deployment.extraVolumes + env para passar o token ao datasource (ver grafana-datasource.yaml).
   route:
