@@ -1,0 +1,42 @@
+# ServiceAccount usado pelo pod Grafana para autenticar contra o Prometheus UWM.
+# O ClusterRoleBinding 'cluster-monitoring-view' concede permissão de leitura
+# ao endpoint de métricas do openshift-user-workload-monitoring.
+#
+# O Secret do tipo service-account-token é criado aqui e referenciado pela
+# GrafanaDatasource via 'valuesFrom' para injetar o bearer token automaticamente.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-serviceaccount
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+# Token estático para o ServiceAccount — preenchido automaticamente pelo OpenShift/Kubernetes.
+# Referenciado pela GrafanaDatasource via valuesFrom.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-sa-token
+  namespace: 3scale-gitops
+  annotations:
+    kubernetes.io/service-account.name: grafana-serviceaccount
+    argocd.argoproj.io/sync-wave: "0"
+type: kubernetes.io/service-account-token
+---
+# Permite ao ServiceAccount do Grafana consultar o Prometheus UWM.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-3scale-monitoring-view
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: grafana-serviceaccount
+    namespace: 3scale-gitops

@@ -1,0 +1,42 @@
+# GrafanaDatasource — Prometheus UWM (OpenShift User Workload Monitoring)
+#
+# Aponta para o Prometheus dedicado a cargas de usuário em:
+#   https://prometheus-user-workload.openshift-user-workload-monitoring.svc:9091
+#
+# Autenticação: bearer token do ServiceAccount 'grafana-serviceaccount' (criado em
+# grafana-rbac.yaml), que tem a ClusterRole 'cluster-monitoring-view'.
+#
+# O campo 'valuesFrom' injeta o token do Secret 'grafana-sa-token' (preenchido
+# automaticamente pelo OpenShift) no placeholder ${prometheusToken} do datasource.
+# O operador Grafana substitui ${prometheusToken} pelo valor real do token antes
+# de configurar o datasource na instância Grafana.
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: prometheus-user-workload
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  valuesFrom:
+    - targetPath: "prometheusToken"
+      valueFrom:
+        secretKeyRef:
+          name: grafana-sa-token
+          key: token
+  datasource:
+    name: Prometheus UWM
+    type: prometheus
+    access: proxy
+    url: https://prometheus-user-workload.openshift-user-workload-monitoring.svc:9091
+    isDefault: true
+    jsonData:
+      tlsSkipVerify: true
+      timeInterval: 30s
+      httpMethod: POST
+      httpHeaderName1: "Authorization"
+    secureJsonData:
+      httpHeaderValue1: "Bearer ${prometheusToken}"

@@ -8,9 +8,10 @@
 #   oc apply -f bootstrap/1-application-operator.yaml       # mesmo arquivo do cluster primário
 #   # aguardar Install Plan → oc -n 3scale-gitops get installplan
 #   oc apply -f bootstrap/2-application-databases.yaml      # mesmo arquivo do cluster primário
-#   oc apply -f bootstrap/3-application-ha-apimanager.yaml  # este arquivo (wildcardDomain do cluster HA)
-#   oc apply -f bootstrap/4-application-apicast-selfmanaged.yaml  # mesmo arquivo
-#   oc apply -f bootstrap/5-application-echoapi.yaml              # mesmo arquivo
+#   oc apply -f bootstrap/3-application-monitoring.yaml     # mesmo arquivo do cluster primário
+#   oc apply -f bootstrap/4-application-ha-apimanager.yaml  # este arquivo (wildcardDomain do cluster HA)
+#   oc apply -f bootstrap/5-application-apicast-selfmanaged.yaml  # mesmo arquivo
+#   oc apply -f bootstrap/6-application-echoapi.yaml              # mesmo arquivo
 #
 # syncPolicy: {} mantém sync manual para permitir aprovação do Install Plan antes de aplicar o CR.
 apiVersion: argoproj.io/v1alpha1

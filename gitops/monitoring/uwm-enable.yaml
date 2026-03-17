@@ -1,0 +1,22 @@
+# Habilita o User Workload Monitoring (UWM) no OpenShift.
+# O UWM provisiona um Prometheus dedicado (prometheus-user-workload) no namespace
+# openshift-user-workload-monitoring, que descobre automaticamente ServiceMonitors
+# e PodMonitors em todos os namespaces de usuário (incluindo 3scale-gitops).
+#
+# IMPORTANTE: Este ConfigMap é aplicado em 'openshift-monitoring', não em '3scale-gitops'.
+# O Argo CD respeita o campo 'namespace' do manifesto e aplica no namespace correto,
+# desde que o ServiceAccount openshift-gitops tenha permissão de escrita em openshift-monitoring.
+#
+# Verificar após o sync:
+#   oc -n openshift-user-workload-monitoring get pods
+# Esperado: prometheus-user-workload-0, thanos-ruler-user-workload-0 em Running.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+data:
+  config.yaml: |
+    enableUserWorkload: true

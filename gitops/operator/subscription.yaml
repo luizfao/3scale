@@ -27,3 +27,23 @@ spec:
   name: apicast-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace
+---
+# Subscription Grafana Operator v5 (Community, Manual)
+# Fornece os CRDs Grafana, GrafanaDatasource e GrafanaDashboard para visualização
+# das métricas coletadas pelo OpenShift User Workload Monitoring (Prometheus UWM).
+# Após a instalação, aprovar o Install Plan:
+#   oc -n 3scale-gitops get installplans
+#   oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: grafana-operator
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  channel: v5
+  installPlanApproval: Manual
+  name: grafana-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace

@@ -80,21 +80,23 @@ São usados **5 Applications**, aplicados em ordem numérica. O operador 3scale 
 ```bash
 # Cluster PRIMÁRIO (e único, se modo 1 cluster):
 oc apply -f bootstrap/1-application-operator.yaml
-# Aguardar a instalação do operador (passo 5) antes de continuar
+# Aguardar a instalação dos operadores (passo 5) antes de continuar
 oc apply -f bootstrap/2-application-databases.yaml
-oc apply -f bootstrap/3-application-apimanager.yaml        # cluster primário
-oc apply -f bootstrap/4-application-apicast-selfmanaged.yaml
-oc apply -f bootstrap/5-application-echoapi.yaml
+oc apply -f bootstrap/3-application-monitoring.yaml
+oc apply -f bootstrap/4-application-apimanager.yaml        # cluster primário
+oc apply -f bootstrap/5-application-apicast-selfmanaged.yaml
+oc apply -f bootstrap/6-application-echoapi.yaml
 ```
 
 ```bash
 # Cluster HA (modo 2 clusters) — mesmos passos, exceto o APIManager:
 oc apply -f bootstrap/1-application-operator.yaml
-# Aguardar a instalação do operador (passo 5) antes de continuar
+# Aguardar a instalação dos operadores (passo 5) antes de continuar
 oc apply -f bootstrap/2-application-databases.yaml
-oc apply -f bootstrap/3-application-ha-apimanager.yaml     # cluster HA
-oc apply -f bootstrap/4-application-apicast-selfmanaged.yaml
-oc apply -f bootstrap/5-application-echoapi.yaml
+oc apply -f bootstrap/3-application-monitoring.yaml
+oc apply -f bootstrap/4-application-ha-apimanager.yaml     # cluster HA
+oc apply -f bootstrap/5-application-apicast-selfmanaged.yaml
+oc apply -f bootstrap/6-application-echoapi.yaml
 ```
 
 Applications criados:
@@ -103,14 +105,15 @@ Applications criados:
 |---|---|---|
 | `3scale-operator` | `1-application-operator.yaml` | `gitops/operator/` |
 | `3scale-databases` | `2-application-databases.yaml` | `gitops/databases/` |
-| `3scale-apimanager` | `3-application-apimanager.yaml` | `gitops/apimanager/` |
-| `3scale-ha-apimanager` | `3-application-ha-apimanager.yaml` | `gitops/apimanager-ha/` |
-| `3scale-apicast-selfmanaged` | `4-application-apicast-selfmanaged.yaml` | `gitops/apicast-selfmanaged/` |
-| `3scale-echoapi` | `5-application-echoapi.yaml` | `gitops/echoapi/` |
+| `3scale-monitoring` | `3-application-monitoring.yaml` | `gitops/monitoring/` |
+| `3scale-apimanager` | `4-application-apimanager.yaml` | `gitops/apimanager/` |
+| `3scale-ha-apimanager` | `4-application-ha-apimanager.yaml` | `gitops/apimanager-ha/` |
+| `3scale-apicast-selfmanaged` | `5-application-apicast-selfmanaged.yaml` | `gitops/apicast-selfmanaged/` |
+| `3scale-echoapi` | `6-application-echoapi.yaml` | `gitops/echoapi/` |
 
-### 5) Aprovar o Install Plan do operador (Manual) — depois sincronize `3scale-apimanager`
+### 5) Aprovar os Install Plans dos operadores (Manual) — depois sincronize os demais Applications
 
-O CRD `APIManager` só existe depois que o operador 3scale (CSV) está instalado. **Depois do sync do Application `3scale-operator`**, aprove o Install Plan. Quando o CSV estiver **Succeeded**, sincronize o Application **`3scale-apimanager`** (ou `3scale-ha-apimanager` no cluster HA) no Argo CD.
+Os CRDs `APIManager` (3scale) e `Grafana`/`GrafanaDatasource` (Grafana Operator) só existem depois que os respectivos operadores (CSV) estão instalados. **Depois do sync do Application `3scale-operator`**, aprove os Install Plans. Quando todos os CSVs estiverem **Succeeded**, sincronize os Applications na ordem numérica: `3scale-monitoring` → `3scale-apimanager` (ou `3scale-ha-apimanager` no cluster HA) → demais.
 
 ```bash
 oc -n 3scale-gitops get installplans
@@ -324,6 +327,69 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 2. Reiniciar APIcast pods para carregar a nova configuração
 3. Testar com Bearer token do Keycloak via `curl --resolve`
 
+## Monitoramento (Prometheus UWM + Grafana)
+
+O monitoramento do 3scale usa o **OpenShift User Workload Monitoring (UWM)** — um Prometheus dedicado a cargas de usuário já embutido no OpenShift — combinado com o **Grafana Operator** (community) para visualização.
+
+> Instalar um Prometheus Operator via OLM em paralelo ao stack de monitoramento do OpenShift causaria conflitos de ownership nos CRDs (`ServiceMonitor`, `PrometheusRule`, etc.), que são cluster-scoped e já gerenciados pelo operador interno. O UWM resolve isso sem operador adicional.
+
+### Arquitetura
+
+```
+openshift-monitoring namespace:
+  ConfigMap cluster-monitoring-config  → ativa o UWM
+
+openshift-user-workload-monitoring namespace:
+  prometheus-user-workload             → descobre ServiceMonitors em 3scale-gitops
+
+3scale-gitops namespace:
+  ServiceMonitors (3scale operator)    → backend-listener, system-app, zync, ...
+  ServiceMonitor (apicast-selfmanaged) → apicast-ha-production, apicast-ha-staging
+  Grafana CR                           → instância Grafana com Route OpenShift
+  GrafanaDatasource                    → aponta para prometheus-user-workload (bearer token)
+```
+
+### Bootstrap
+
+```bash
+# Aplicar em cada cluster (primário e HA):
+oc apply -f bootstrap/3-application-monitoring.yaml
+```
+
+Antes do primeiro sync, aprovar o Install Plan do Grafana Operator (instalado junto com os demais operadores no passo 1):
+
+```bash
+oc -n 3scale-gitops get installplans
+oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
+# Aguardar o operador ficar instalado:
+oc -n 3scale-gitops get csv -w
+```
+
+Após o sync, verificar o UWM e obter a URL do Grafana:
+
+```bash
+# Confirmar que o Prometheus UWM está ativo:
+oc -n openshift-user-workload-monitoring get pods
+
+# URL do Grafana:
+oc -n 3scale-gitops get route -l app=grafana -o jsonpath='{.items[0].spec.host}'
+```
+
+Credenciais padrão: `admin` / `change-me-grafana-password` (altere em `gitops/monitoring/grafana.yaml` antes do sync).
+
+### Métricas disponíveis
+
+O operador 3scale cria automaticamente ServiceMonitors para todos os componentes quando `spec.monitoring.enableServiceMonitors: true` está no APIManager. As principais métricas:
+
+| Componente | Métricas principais |
+|------------|---------------------|
+| `backend-listener` | `apisonator_listener_response_codes_total`, latência de authorize/report |
+| `system-app` | métricas Rails (ActiveRecord, Sidekiq queue depth) |
+| `zync` | `zync_que_job_*`, erros de sincronização Keycloak |
+| `apicast` (self-managed) | `nginx_http_requests_total`, `threescale_backend_calls_total` |
+
+---
+
 ## Estrutura do repositório (manifestos)
 
 | Caminho | Descrição |
@@ -331,13 +397,14 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 | `bootstrap/0-repo-credentials-secret.example.yaml` | Exemplo de Secret para repositório privado (Argo CD) |
 | `bootstrap/1-application-operator.yaml` | Argo CD Application `3scale-operator` (monitora `gitops/operator/`) |
 | `bootstrap/2-application-databases.yaml` | Argo CD Application `3scale-databases` (monitora `gitops/databases/`) |
-| `bootstrap/3-application-apimanager.yaml` | Argo CD Application `3scale-apimanager` — cluster primário (`gitops/apimanager/`) |
-| `bootstrap/3-application-ha-apimanager.yaml` | Argo CD Application `3scale-ha-apimanager` — cluster HA (`gitops/apimanager-ha/`) |
-| `bootstrap/4-application-apicast-selfmanaged.yaml` | Argo CD Application `3scale-apicast-selfmanaged` (`gitops/apicast-selfmanaged/`) |
-| `bootstrap/5-application-echoapi.yaml` | Argo CD Application `3scale-echoapi` (`gitops/echoapi/`) |
+| `bootstrap/3-application-monitoring.yaml` | Argo CD Application `3scale-monitoring` (`gitops/monitoring/`) |
+| `bootstrap/4-application-apimanager.yaml` | Argo CD Application `3scale-apimanager` — cluster primário (`gitops/apimanager/`) |
+| `bootstrap/4-application-ha-apimanager.yaml` | Argo CD Application `3scale-ha-apimanager` — cluster HA (`gitops/apimanager-ha/`) |
+| `bootstrap/5-application-apicast-selfmanaged.yaml` | Argo CD Application `3scale-apicast-selfmanaged` (`gitops/apicast-selfmanaged/`) |
+| `bootstrap/6-application-echoapi.yaml` | Argo CD Application `3scale-echoapi` (`gitops/echoapi/`) |
 | `gitops/operator/namespace.yaml` | Namespace `3scale-gitops` |
 | `gitops/operator/operatorgroup.yaml` | OperatorGroup (operador no namespace) |
-| `gitops/operator/subscription.yaml` | Subscription 3scale Operator 2.16 (aprovação Manual) |
+| `gitops/operator/subscription.yaml` | Subscriptions: 3scale Operator 2.16, APIcast Operator e Grafana Operator (aprovação Manual) |
 | `gitops/databases/namespace.yaml` | Namespace `3scale-databases` |
 | `gitops/databases/postgresql-system/postgresql.yaml` | PostgreSQL para System (`system_production`) em `3scale-databases` |
 | `gitops/databases/redis-common/redis-config.yaml` | ConfigMap `redis-config-external` com persistência habilitada (`appendonly`, `save`) |
@@ -354,6 +421,11 @@ O cliente final nunca precisa saber a `user_key` do 3scale; envia apenas o seu B
 | `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product` (user_key), `DeveloperAccount`, `DeveloperUser`, `Application` |
 | `gitops/echoapi/echoapi-product-oidc.yaml` | `Product` OIDC + Token Introspection e `Application` correspondente |
 | `gitops/echoapi/echoapi-product-rhbk-auth.yaml` | `Product` RHBK Auth (`default_credentials` + `token_introspection`) e `Application` anônima |
+| `gitops/monitoring/uwm-enable.yaml` | ConfigMap que habilita o User Workload Monitoring em `openshift-monitoring` |
+| `gitops/monitoring/grafana-rbac.yaml` | ServiceAccount + Secret token + ClusterRoleBinding `cluster-monitoring-view` para o Grafana |
+| `gitops/monitoring/grafana.yaml` | Grafana CR com Route OpenShift (Grafana Operator v5) |
+| `gitops/monitoring/grafana-datasource.yaml` | GrafanaDatasource apontando para o Prometheus UWM com bearer token |
+| `gitops/monitoring/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed (porta `metrics` 9421) |
 | `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API (user_key) |
 | `ECHOAPI_OIDC_MANUAL_STEPS.md` | Passos manuais para Echo API OIDC: secret Zync, roles Keycloak, token e teste |
 | `ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md` | Passos manuais para Echo API RHBK Auth: ProxyConfigPromote e teste com Bearer token Keycloak |
@@ -440,6 +512,9 @@ for a in apps:
 ## Melhorias
 
 - Adicionar passos de "fork" para utilização e `contributing.md` para melhorias;
+- Adicionar requests e limits dos componentes
+- Adicionar anti-affinity para distribuir os pods relativos aos componentes escaláveis como apicasts, backend-listener e backend-worker
+
 
 ---
 

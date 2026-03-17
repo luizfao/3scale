@@ -1,7 +1,11 @@
 # Application que aplica apenas o APIManager CR.
-# Depende do Application "3scale" (namespaces, operator, DBs, secrets) e do operador
+# Depende do Application "3scale-operator" (namespaces, operator, DBs, secrets) e do operador
 # 3scale estar instalado (Install Plan aprovado, CSV Succeeded). Sincronize este
-# Application somente após o primeiro sync do "3scale" e a aprovação do Install Plan.
+# Application somente após o primeiro sync do "3scale-operator" e a aprovação do Install Plan.
+#
+# O Application "3scale-monitoring" (3-application-monitoring.yaml) deve estar sincronizado
+# antes deste, para que o Prometheus UWM esteja ativo quando o operador 3scale criar os
+# ServiceMonitors via spec.monitoring.enableServiceMonitors: true.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

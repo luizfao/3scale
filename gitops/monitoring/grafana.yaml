@@ -1,0 +1,43 @@
+# Grafana CR — Grafana Operator v5 (grafana.integreatly.org/v1beta1)
+#
+# O operador cria um Deployment, Service e (via spec.route) um Route OpenShift.
+# O label 'dashboards: grafana' é usado como selector por GrafanaDatasource e
+# GrafanaDashboard para associar recursos a esta instância.
+#
+# ANTES DE SINCRONIZAR:
+#   Altere 'change-me-grafana-password' para uma senha segura.
+#   O campo admin_password pode ser referenciado via env var com spec.deployment.env
+#   se preferir armazenar em um Secret separado.
+#
+# Acesso após o sync:
+#   oc -n 3scale-gitops get route grafana-route -o jsonpath='{.spec.host}'
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: grafana
+  namespace: 3scale-gitops
+  labels:
+    dashboards: grafana
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  config:
+    auth:
+      disable_login_form: "false"
+    log:
+      mode: console
+    security:
+      admin_user: admin
+      admin_password: change-me-grafana-password   # altere antes de usar em produção
+  serviceAccount:
+    annotations: {}
+    # O Grafana Operator cria seu próprio SA; usamos grafana-serviceaccount via
+    # deployment.extraVolumes + env para passar o token ao datasource (ver grafana-datasource.yaml).
+  route:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect

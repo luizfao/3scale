@@ -1,8 +1,6 @@
-# Argo CD Application — APIcast Self-Managed (cluster primário)
+# Argo CD Application — APIcast Self-Managed (cluster primário e HA)
 #
 # Gerencia os APIcast CRs de produção e staging com URL independente do cluster.
-# Aplicar no cluster primário (cluster-zrdcz):
-#   oc apply -f bootstrap/application-apicast-selfmanaged.yaml
 #
 # ATENÇÃO: Preencha a Secret apicast-ha-portal-credentials ANTES de sincronizar.
 # Consulte gitops/apicast-selfmanaged/apicast.yaml para os passos necessários.

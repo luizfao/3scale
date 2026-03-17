@@ -26,6 +26,11 @@ spec:
     fileStorage:
       persistentVolumeClaim:
         storageClassName: ocs-external-storagecluster-cephfs
+  # Habilita a criação automática de ServiceMonitors e PrometheusRules pelo operador 3scale.
+  # Requer o Application '3scale-monitoring' sincronizado (Grafana Operator + UWM ativos).
+  monitoring:
+    enablePrometheusRules: true
+    enableServiceMonitors: true
   # Optional: explicit replicas (defaults are fine for lab)
   # system:
   #   appSpec:

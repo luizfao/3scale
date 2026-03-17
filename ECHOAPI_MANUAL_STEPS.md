@@ -5,7 +5,7 @@ Este arquivo cobre os passos operacionais que nao sao ideais para reconciliacao 
 ## 1) Aplicar o Application do Echo API
 
 ```bash
-oc apply -f bootstrap/5-application-echoapi.yaml
+oc apply -f bootstrap/6-application-echoapi.yaml
 ```
 
 No Argo CD, sincronize o app `3scale-echoapi`.

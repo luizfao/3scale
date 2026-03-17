@@ -31,6 +31,11 @@ spec:
     # Zync database can be internal
     # zync:
     #   database: true
+  # Habilita a criação automática de ServiceMonitors e PrometheusRules pelo operador 3scale.
+  # Requer o Application '3scale-monitoring' sincronizado (Grafana Operator + UWM ativos).
+  monitoring:
+    enablePrometheusRules: true
+    enableServiceMonitors: true
   # Ajuste storageClassName se o cluster HA usar uma StorageClass diferente.
   # Ceph RBD does not support RWX; use CephFS for system file storage (Developer Portal / assets).
   system:
