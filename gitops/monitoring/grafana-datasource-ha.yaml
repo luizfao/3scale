@@ -1,3 +1,6 @@
+# NÃO aplicado pelo Argo CD por padrão — veja bootstrap/3-application-monitoring.yaml (exclude).
+# Depois de configurar o cluster HA, remova o exclude OU: oc apply -f gitops/monitoring/grafana-datasource-ha.yaml
+#
 # Secret com o bearer token do grafana-serviceaccount do cluster HA.
 # Este token permite ao Grafana do cluster primário consultar o Prometheus UWM do cluster HA.
 #

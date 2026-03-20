@@ -4,8 +4,12 @@
 #   - Habilitação do OpenShift User Workload Monitoring (UWM) em openshift-monitoring
 #   - RBAC do ServiceAccount Grafana (acesso ao Prometheus UWM)
 #   - Grafana CR (instância Grafana com Route OpenShift)
-#   - GrafanaDatasource apontando para o Prometheus UWM
+#   - GrafanaDatasource "Prometheus Primary" (UWM local)
 #   - ServiceMonitor para os pods APIcast Self-Managed
+#
+# O arquivo grafana-datasource-ha.yaml está EXCLUÍDO do sync por padrão: ele só deve ser
+# aplicado após o cluster HA estar ativo, com URL real do Route e Secret grafana-ha-sa-token.
+# Para consolidar o HA, remova a linha "exclude" abaixo (ou aplique esse manifest manualmente).
 #
 # Aplicado ANTES do APIManager (4-application-apimanager.yaml) para garantir que o
 # Prometheus UWM já esteja ativo quando o operador 3scale criar os ServiceMonitors.
@@ -14,7 +18,7 @@
 #   oc -n 3scale-gitops get installplans
 #   oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
 #
-# Aplicar no cluster (primário e HA):
+# Aplicar somente no cluster PRIMÁRIO (Grafana fica aqui):
 #   oc apply -f bootstrap/3-application-monitoring.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -29,6 +33,7 @@ spec:
     path: gitops/monitoring
     directory:
       recurse: true
+      exclude: grafana-datasource-ha.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: 3scale-gitops

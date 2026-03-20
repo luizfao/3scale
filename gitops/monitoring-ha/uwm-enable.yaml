@@ -16,8 +16,8 @@ data:
     enableUserWorkload: true
 ---
 # Configura o Prometheus UWM do cluster HA com external_labels.
-# O label instance=ha é adicionado a todas as métricas coletadas neste cluster,
-# permitindo ao Grafana (hospedado no cluster primário) distinguir as origens.
+# O label site=ha identifica a origem das séries no Grafana do cluster primário.
+# Evite "cluster" (reservado pelo CMO) e "instance" (label por target no Prometheus).
 #
 # NOTA: O namespace openshift-user-workload-monitoring só existe após o UWM ser habilitado
 # (ConfigMap acima). Na primeira execução deste Application o sync pode falhar para este
@@ -34,4 +34,4 @@ data:
   config.yaml: |
     prometheus:
       externalLabels:
-        instance: ha
+        site: ha

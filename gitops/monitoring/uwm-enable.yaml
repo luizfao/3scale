@@ -22,8 +22,11 @@ data:
     enableUserWorkload: true
 ---
 # Configura o Prometheus UWM do cluster PRIMÁRIO com external_labels.
-# O label instance=primary é adicionado a todas as métricas coletadas neste cluster,
-# permitindo distingui-las das métricas do cluster HA no Grafana.
+# O label site=primary identifica a origem das séries ao consolidar métricas no Grafana.
+#
+# NÃO use a chave "cluster" — é reservada pelo validador do Cluster Monitoring Operator.
+# NÃO use "instance" — conflita com o label nativo "instance" de cada target no Prometheus
+# (host:port) e pode distorcer consultas/agregações no Grafana.
 #
 # NOTA: O namespace openshift-user-workload-monitoring só existe após o UWM ser habilitado
 # (ConfigMap acima). Na primeira execução deste Application o sync pode falhar para este
@@ -42,4 +45,4 @@ data:
   config.yaml: |
     prometheus:
       externalLabels:
-        instance: primary
+        site: primary
