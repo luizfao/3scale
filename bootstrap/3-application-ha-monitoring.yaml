@@ -1,7 +1,7 @@
 # Argo CD Application — Monitoramento 3scale HA (UWM + Route Prometheus)
 #
 # Gerencia a configuração de monitoramento do 3scale no cluster HA:
-#   - Habilitação do OpenShift User Workload Monitoring (UWM) com label cluster=ha
+#   - Habilitação do OpenShift User Workload Monitoring (UWM) com label instance=ha
 #   - RBAC do ServiceAccount grafana-serviceaccount (token usado pelo Grafana do cluster primário)
 #   - Route externo expondo o Prometheus UWM deste cluster para o Grafana do cluster primário
 #   - ServiceMonitor para os pods APIcast Self-Managed do cluster HA

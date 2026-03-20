@@ -376,7 +376,7 @@ O monitoramento do 3scale usa o **OpenShift User Workload Monitoring (UWM)** —
 
 ### Arquitetura (consolidada em um único Grafana)
 
-O Grafana fica instalado **somente no cluster primário** e consolida métricas dos dois clusters via dois datasources distintos. Cada cluster adiciona o label `cluster=primary` ou `cluster=ha` a todas as métricas via `externalLabels`, permitindo filtrar e comparar no mesmo dashboard.
+O Grafana fica instalado **somente no cluster primário** e consolida métricas dos dois clusters via dois datasources distintos. Cada cluster adiciona o label `instance=primary` ou `instance=ha` a todas as métricas via `externalLabels`, permitindo filtrar e comparar no mesmo dashboard.
 
 ```
 Cluster PRIMÁRIO                              Cluster HA
@@ -386,7 +386,7 @@ openshift-monitoring:                         openshift-monitoring:
 
 openshift-user-workload-monitoring:           openshift-user-workload-monitoring:
   user-workload-monitoring-config              user-workload-monitoring-config
-    externalLabels: cluster=primary              externalLabels: cluster=ha
+    externalLabels: instance=primary              externalLabels: instance=ha
   prometheus-user-workload (interno)           prometheus-user-workload
                                                Route: prometheus-user-workload-external ──┐
 3scale-gitops namespace:                                                                   │
@@ -442,13 +442,13 @@ O operador 3scale cria automaticamente ServiceMonitors para todos os componentes
 | `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product` (user_key), `DeveloperAccount`, `DeveloperUser`, `Application` |
 | `gitops/echoapi/echoapi-product-oidc.yaml` | `Product` OIDC + Token Introspection e `Application` correspondente |
 | `gitops/echoapi/echoapi-product-rhbk-auth.yaml` | `Product` RHBK Auth (`default_credentials` + `token_introspection`) e `Application` anônima |
-| `gitops/monitoring/uwm-enable.yaml` | Habilita UWM (`openshift-monitoring`) + configura `externalLabels: cluster=primary` (`openshift-user-workload-monitoring`) |
+| `gitops/monitoring/uwm-enable.yaml` | Habilita UWM (`openshift-monitoring`) + configura `externalLabels: instance=primary` (`openshift-user-workload-monitoring`) |
 | `gitops/monitoring/grafana-rbac.yaml` | ServiceAccount + Secret token + ClusterRoleBinding `cluster-monitoring-view` para o Grafana |
 | `gitops/monitoring/grafana.yaml` | Grafana CR com Route OpenShift (Grafana Operator v5) |
 | `gitops/monitoring/grafana-datasource.yaml` | GrafanaDatasource "Prometheus Primary" — Prometheus UWM local (interno) |
 | `gitops/monitoring/grafana-datasource-ha.yaml` | GrafanaDatasource "Prometheus HA" — Prometheus UWM do cluster HA (Route externo) |
 | `gitops/monitoring/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed (porta `metrics` 9421) |
-| `gitops/monitoring-ha/uwm-enable.yaml` | Habilita UWM + configura `externalLabels: cluster=ha` no cluster HA |
+| `gitops/monitoring-ha/uwm-enable.yaml` | Habilita UWM + configura `externalLabels: instance=ha` no cluster HA |
 | `gitops/monitoring-ha/grafana-rbac.yaml` | SA + token para autenticação cross-cluster pelo Grafana do cluster primário |
 | `gitops/monitoring-ha/prometheus-route.yaml` | Route externo expondo o Prometheus UWM do cluster HA para o Grafana do primário |
 | `gitops/monitoring-ha/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed do cluster HA |

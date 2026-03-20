@@ -1,6 +1,6 @@
 # ServiceMonitor para os pods APIcast Self-Managed do cluster HA (production + staging).
 #
-# Métricas coletadas aqui incluirão o label cluster=ha (configurado via external_labels
+# Métricas coletadas aqui incluirão o label instance=ha (configurado via external_labels
 # em uwm-enable.yaml), permitindo distinção no Grafana em relação ao cluster primário.
 #
 # Métricas expostas pelo APIcast:
