@@ -1,0 +1,28 @@
+# Route que expõe o Thanos Querier deste cluster para consultas PromQL externas.
+# O Grafana no cluster primário usa esta URL no datasource "Prometheus HA".
+#
+# NÃO use Route para prometheus-user-workload:9091 — nessa porta o OpenShift expõe
+# apenas /metrics; /api/v1/query retorna 404. O Thanos Querier (:9091, porta "web")
+# expõe a API completa (ver annotations do Service thanos-querier).
+#
+# Após o sync:
+#   oc -n openshift-monitoring get route thanos-querier-external \
+#     -o jsonpath='https://{.spec.host}'
+#
+# Configurar em: gitops/monitoring/grafana-datasource-ha.yaml → datasource.url
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: thanos-querier-external
+  namespace: openshift-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  to:
+    kind: Service
+    name: thanos-querier
+  port:
+    targetPort: web
+  tls:
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect

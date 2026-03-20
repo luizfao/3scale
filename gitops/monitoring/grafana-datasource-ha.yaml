@@ -10,8 +10,8 @@
 #      oc login <HA_CLUSTER_API_URL>
 #      HA_TOKEN=$(oc -n 3scale-gitops get secret grafana-sa-token -o jsonpath='{.data.token}' | base64 -d)
 #
-#   2. Obter a URL do Route exposto no cluster HA:
-#      HA_PROM_URL=$(oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+#   2. Obter a URL do Route Thanos Querier no cluster HA (API PromQL completa):
+#      HA_PROM_URL=$(oc -n openshift-monitoring get route thanos-querier-external \
 #        -o jsonpath='https://{.spec.host}')
 #
 #   3. Criar o Secret no cluster PRIMÁRIO:
@@ -35,7 +35,7 @@ spec:
     matchLabels:
       dashboards: grafana
   valuesFrom:
-    - targetPath: "prometheusToken"
+    - targetPath: secureJsonData.httpHeaderValue1
       valueFrom:
         secretKeyRef:
           name: grafana-ha-sa-token
@@ -44,8 +44,8 @@ spec:
     name: Prometheus HA
     type: prometheus
     access: proxy
-    # Substituir pela URL do Route criado no cluster HA (prometheus-route.yaml em monitoring-ha/).
-    # Obter com: oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+    # URL do Route thanos-querier-external no cluster HA (ver monitoring-ha/thanos-querier-route.yaml).
+    # Obter com: oc -n openshift-monitoring get route thanos-querier-external \
     #              -o jsonpath='https://{.spec.host}'
     url: https://change-me-prometheus-uwm-ha-url
     isDefault: false
@@ -55,4 +55,4 @@ spec:
       httpMethod: POST
       httpHeaderName1: "Authorization"
     secureJsonData:
-      httpHeaderValue1: "Bearer ${prometheusToken}"
+      httpHeaderValue1: "Bearer ${token}"

@@ -138,9 +138,9 @@ Após o sync de `3scale-ha-monitoring` no cluster HA, o Prometheus UWM deste clu
 No repositório, o manifest `gitops/monitoring/grafana-datasource-ha.yaml` fica **fora do sync** do Argo CD por padrão (`exclude` em `bootstrap/3-application-monitoring.yaml`), para não registrar um datasource com URL inválida (isso quebra o Explore / dashboards com **HTTP 404**). Quando o HA estiver pronto: (1) preencha a URL e faça commit; (2) remova a linha `exclude: grafana-datasource-ha.yaml` do Application **ou** aplique o manifest manualmente com `oc apply -f gitops/monitoring/grafana-datasource-ha.yaml`.
 
 ```bash
-# No cluster HA — obter a URL do Route do Prometheus:
+# No cluster HA — obter a URL do Route do Thanos Querier (API PromQL completa):
 oc login <HA_CLUSTER_API_URL>
-HA_PROM_URL=$(oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+HA_PROM_URL=$(oc -n openshift-monitoring get route thanos-querier-external \
   -o jsonpath='https://{.spec.host}')
 echo "Prometheus HA URL: ${HA_PROM_URL}"
 
@@ -389,14 +389,14 @@ openshift-monitoring:                         openshift-monitoring:
 openshift-user-workload-monitoring:           openshift-user-workload-monitoring:
   user-workload-monitoring-config              user-workload-monitoring-config
     externalLabels: site=primary                 externalLabels: site=ha
-  prometheus-user-workload (interno)           prometheus-user-workload
-                                               Route: prometheus-user-workload-external ──┐
-3scale-gitops namespace:                                                                   │
-  ServiceMonitors (3scale operator)           3scale-gitops namespace:                    │
-  ServiceMonitor apicast-selfmanaged            ServiceMonitors (3scale operator)         │
-  Grafana CR + Route                            ServiceMonitor apicast-selfmanaged        │
-  GrafanaDatasource "Prometheus Primary"      grafana-sa-token  (token copiado manualmente)
-  GrafanaDatasource "Prometheus HA"  ◄────────────────────────────────────────────────────┘
+  prometheus-user-workload (scrape interno)    prometheus-user-workload
+
+openshift-monitoring:                         openshift-monitoring:
+  thanos-querier :9091 (API PromQL completa)   Route: thanos-querier-external ─────────────┐
+3scale-gitops:                                      3scale-gitops:                       │
+  ServiceMonitors + APIcast SM                       ServiceMonitors + APIcast SM         │
+  Grafana + datasource → Thanos (in-cluster)         grafana-sa-token p/ cross-cluster     │
+  GrafanaDatasource "Prometheus HA" ◄─────────────────────────────────────────────────────┘
 ```
 
 ### Métricas disponíveis
@@ -412,12 +412,11 @@ O operador 3scale cria automaticamente ServiceMonitors para todos os componentes
 
 ### Problemas comuns (Grafana)
 
-**Explore / queries retornam HTTP 404 (somente cluster primário, HA ainda não configurado)**  
-Causa típica: existe um segundo datasource (`Prometheus HA`) apontando para o placeholder `change-me-prometheus-uwm-ha-url` (hostname inexistente). O servidor Grafana faz *proxy* das consultas e recebe 404.
+**Explore / queries retornam HTTP 404 no datasource “Prometheus”**
 
-1. Confirme: **Connections → Data sources** no Grafana — se **Prometheus HA** existir com URL inválida, remova o datasource ou corrija a URL.
-2. No cluster: `oc -n 3scale-gitops delete grafanadatasource prometheus-user-workload-ha` — com o `exclude` no Application, o Argo **não remove** CRs antigos sozinho (a menos que você sincronize com *prune*). Por isso apague o datasource uma vez após atualizar o bootstrap.
-3. Garanta que o Application `3scale-monitoring` mantém `exclude: grafana-datasource-ha.yaml` até o HA estar pronto (ver `bootstrap/3-application-monitoring.yaml`).
+1. **OpenShift recente:** o Service `prometheus-user-workload` na porta **9091** expõe só **`/metrics`**. A API `/api/v1/query` nesse alvo retorna **404** (ver annotations do Service). O datasource deve apontar para **`https://thanos-querier.openshift-monitoring.svc:9091`** (já refletido em `gitops/monitoring/grafana-datasource.yaml`).
+2. **Datasource HA com placeholder:** segundo datasource com URL `change-me-prometheus-uwm-ha-url` também gera 404. Remova o CR ou use `exclude` no Application até configurar o HA; veja passo 6 do *Como usar*.
+3. **Token no Grafana Operator:** `valuesFrom.targetPath` deve ser `secureJsonData.httpHeaderValue1` e o placeholder **`Bearer ${token}`** (nome da chave no Secret). `targetPath: prometheusToken` não substitui o token.
 
 **Datasource “Prometheus Primary” com erro (401/403 ou TLS)**  
 Verifique se o Secret `grafana-sa-token` foi preenchido pelo OpenShift e se o `ClusterRoleBinding` `cluster-monitoring-view` está aplicado (`gitops/monitoring/grafana-rbac.yaml`).
@@ -462,12 +461,12 @@ O pod `prometheus-user-workload` pode reiniciar; aguarde `Running` antes de test
 | `gitops/monitoring/uwm-enable.yaml` | Habilita UWM (`openshift-monitoring`) + `externalLabels: site=primary` (`openshift-user-workload-monitoring`) |
 | `gitops/monitoring/grafana-rbac.yaml` | ServiceAccount + Secret token + ClusterRoleBinding `cluster-monitoring-view` para o Grafana |
 | `gitops/monitoring/grafana.yaml` | Grafana CR com Route OpenShift (Grafana Operator v5) |
-| `gitops/monitoring/grafana-datasource.yaml` | GrafanaDatasource "Prometheus Primary" — Prometheus UWM local (interno) |
-| `gitops/monitoring/grafana-datasource-ha.yaml` | GrafanaDatasource "Prometheus HA" (Route do cluster HA). Excluído do sync por padrão no Application — ver `bootstrap/3-application-monitoring.yaml` |
+| `gitops/monitoring/grafana-datasource.yaml` | GrafanaDatasource "Prometheus Primary" — Thanos Querier (`openshift-monitoring:9091`, API PromQL completa) |
+| `gitops/monitoring/grafana-datasource-ha.yaml` | GrafanaDatasource "Prometheus HA" (Route `thanos-querier-external` no cluster HA). Excluído do sync por padrão — ver `bootstrap/3-application-monitoring.yaml` |
 | `gitops/monitoring/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed (porta `metrics` 9421) |
 | `gitops/monitoring-ha/uwm-enable.yaml` | Habilita UWM + `externalLabels: site=ha` no cluster HA |
 | `gitops/monitoring-ha/grafana-rbac.yaml` | SA + token para autenticação cross-cluster pelo Grafana do cluster primário |
-| `gitops/monitoring-ha/prometheus-route.yaml` | Route externo expondo o Prometheus UWM do cluster HA para o Grafana do primário |
+| `gitops/monitoring-ha/thanos-querier-route.yaml` | Route `thanos-querier-external` em `openshift-monitoring` (API PromQL; não usar `prometheus-user-workload:9091` para o Grafana) |
 | `gitops/monitoring-ha/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed do cluster HA |
 | `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API (user_key) |
 | `ECHOAPI_OIDC_MANUAL_STEPS.md` | Passos manuais para Echo API OIDC: secret Zync, roles Keycloak, token e teste |

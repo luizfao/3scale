@@ -1,9 +1,9 @@
 # Argo CD Application — Monitoramento 3scale HA (UWM + Route Prometheus)
 #
 # Gerencia a configuração de monitoramento do 3scale no cluster HA:
-#   - Habilitação do OpenShift User Workload Monitoring (UWM) com label instance=ha
+#   - Habilitação do OpenShift User Workload Monitoring (UWM) com label site=ha
 #   - RBAC do ServiceAccount grafana-serviceaccount (token usado pelo Grafana do cluster primário)
-#   - Route externo expondo o Prometheus UWM deste cluster para o Grafana do cluster primário
+#   - Route externo Thanos Querier (API PromQL) para o Grafana do cluster primário
 #   - ServiceMonitor para os pods APIcast Self-Managed do cluster HA
 #
 # NÃO instala Grafana neste cluster — o Grafana está centralizado no cluster primário,
@@ -17,7 +17,7 @@
 #   oc apply -f bootstrap/3-application-ha-monitoring.yaml
 #
 # APÓS o sync, obter a URL do Route para configurar no cluster primário:
-#   oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+#   oc -n openshift-monitoring get route thanos-querier-external \
 #     -o jsonpath='https://{.spec.host}'
 # Atualizar este valor em:
 #   gitops/monitoring/grafana-datasource-ha.yaml → datasource.url

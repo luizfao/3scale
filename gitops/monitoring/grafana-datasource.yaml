@@ -1,15 +1,21 @@
-# GrafanaDatasource — Prometheus UWM (OpenShift User Workload Monitoring)
+# GrafanaDatasource — métricas via Thanos Querier (OpenShift Monitoring)
 #
-# Aponta para o Prometheus dedicado a cargas de usuário em:
-#   https://prometheus-user-workload.openshift-user-workload-monitoring.svc:9091
+# IMPORTANTE (OCP 4.12+): o Service prometheus-user-workload:9091 expõe apenas o
+# endpoint /metrics (uso interno). Chamadas como /api/v1/query nesse host:porta
+# retornam HTTP 404 — por isso o Grafana não consegue usar "Save & test" contra
+# prometheus-user-workload diretamente.
 #
-# Autenticação: bearer token do ServiceAccount 'grafana-serviceaccount' (criado em
-# grafana-rbac.yaml), que tem a ClusterRole 'cluster-monitoring-view'.
+# O Thanos Querier (openshift-monitoring:9091) agrega o Prometheus de infra e o
+# de user-workload e expõe a API PromQL completa. O mesmo token SA com
+# cluster-monitoring-view funciona.
 #
-# O campo 'valuesFrom' injeta o token do Secret 'grafana-sa-token' (preenchido
-# automaticamente pelo OpenShift) no placeholder ${prometheusToken} do datasource.
-# O operador Grafana substitui ${prometheusToken} pelo valor real do token antes
-# de configurar o datasource na instância Grafana.
+# valuesFrom: targetPath deve apontar para o campo onde está o placeholder ${token}
+# (nome da chave no Secret). targetPath "prometheusToken" NÃO funciona — o operador
+# só substitui em caminhos JSON existentes (ver código do grafana-operator).
+#
+# Referência (annotations do Service): oc -n openshift-user-workload-monitoring
+#   get svc prometheus-user-workload -o yaml
+# oc -n openshift-monitoring get svc thanos-querier -o yaml
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
@@ -22,7 +28,7 @@ spec:
     matchLabels:
       dashboards: grafana
   valuesFrom:
-    - targetPath: "prometheusToken"
+    - targetPath: secureJsonData.httpHeaderValue1
       valueFrom:
         secretKeyRef:
           name: grafana-sa-token
@@ -31,7 +37,7 @@ spec:
     name: Prometheus Primary
     type: prometheus
     access: proxy
-    url: https://prometheus-user-workload.openshift-user-workload-monitoring.svc:9091
+    url: https://thanos-querier.openshift-monitoring.svc:9091
     isDefault: true
     jsonData:
       tlsSkipVerify: true
@@ -39,4 +45,4 @@ spec:
       httpMethod: POST
       httpHeaderName1: "Authorization"
     secureJsonData:
-      httpHeaderValue1: "Bearer ${prometheusToken}"
+      httpHeaderValue1: "Bearer ${token}"
