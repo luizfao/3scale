@@ -1,0 +1,28 @@
+# Route que expõe o Prometheus UWM do cluster HA externamente.
+# O Grafana instalado no cluster primário utiliza este Route como datasource "Prometheus HA".
+#
+# O serviço prometheus-user-workload usa TLS internamente (porta 9091).
+# A terminação 'reencrypt' encerra o TLS externo e inicia um novo TLS para o backend.
+#
+# Após o sync, obter a URL do Route com:
+#   oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+#     -o jsonpath='https://{.spec.host}'
+#
+# Esta URL deve ser configurada em:
+#   gitops/monitoring/grafana-datasource-ha.yaml → datasource.url
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: prometheus-user-workload-external
+  namespace: openshift-user-workload-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  to:
+    kind: Service
+    name: prometheus-user-workload
+  port:
+    targetPort: web
+  tls:
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect

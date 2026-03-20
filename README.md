@@ -75,56 +75,97 @@ Edite todos os arquivos em `bootstrap/` e substitua `repoURL: https://github.com
 
 ### 4) Bootstrap do Argo CD
 
-São usados **5 Applications**, aplicados em ordem numérica. O operador 3scale precisa estar instalado antes de aplicar o APIManager (passo 5 abaixo).
+Aplique os Applications em ordem numérica. O arquivo de monitoramento e o de APIManager diferem entre os dois clusters no modo HA.
 
 ```bash
 # Cluster PRIMÁRIO (e único, se modo 1 cluster):
+oc login <PRIMARY_CLUSTER_API_URL>
 oc apply -f bootstrap/1-application-operator.yaml
-# Aguardar a instalação dos operadores (passo 5) antes de continuar
+# Aguardar a aprovação dos Install Plans (passo 5) antes de continuar
 oc apply -f bootstrap/2-application-databases.yaml
-oc apply -f bootstrap/3-application-monitoring.yaml
-oc apply -f bootstrap/4-application-apimanager.yaml        # cluster primário
+oc apply -f bootstrap/3-application-monitoring.yaml        # Grafana + UWM + dois datasources
+oc apply -f bootstrap/4-application-apimanager.yaml
 oc apply -f bootstrap/5-application-apicast-selfmanaged.yaml
 oc apply -f bootstrap/6-application-echoapi.yaml
 ```
 
 ```bash
-# Cluster HA (modo 2 clusters) — mesmos passos, exceto o APIManager:
+# Cluster HA (modo 2 clusters):
+oc login <HA_CLUSTER_API_URL>
 oc apply -f bootstrap/1-application-operator.yaml
-# Aguardar a instalação dos operadores (passo 5) antes de continuar
+# Aguardar a aprovação dos Install Plans (passo 5) antes de continuar
 oc apply -f bootstrap/2-application-databases.yaml
-oc apply -f bootstrap/3-application-monitoring.yaml
-oc apply -f bootstrap/4-application-ha-apimanager.yaml     # cluster HA
+oc apply -f bootstrap/3-application-ha-monitoring.yaml     # UWM + Route Prometheus (sem Grafana)
+oc apply -f bootstrap/4-application-ha-apimanager.yaml
 oc apply -f bootstrap/5-application-apicast-selfmanaged.yaml
 oc apply -f bootstrap/6-application-echoapi.yaml
 ```
 
 Applications criados:
 
-| Application Argo CD | Arquivo bootstrap | Diretório GitOps |
-|---|---|---|
-| `3scale-operator` | `1-application-operator.yaml` | `gitops/operator/` |
-| `3scale-databases` | `2-application-databases.yaml` | `gitops/databases/` |
-| `3scale-monitoring` | `3-application-monitoring.yaml` | `gitops/monitoring/` |
-| `3scale-apimanager` | `4-application-apimanager.yaml` | `gitops/apimanager/` |
-| `3scale-ha-apimanager` | `4-application-ha-apimanager.yaml` | `gitops/apimanager-ha/` |
-| `3scale-apicast-selfmanaged` | `5-application-apicast-selfmanaged.yaml` | `gitops/apicast-selfmanaged/` |
-| `3scale-echoapi` | `6-application-echoapi.yaml` | `gitops/echoapi/` |
+| Application Argo CD | Arquivo bootstrap | Cluster | Diretório GitOps |
+|---|---|---|---|
+| `3scale-operator` | `1-application-operator.yaml` | ambos | `gitops/operator/` |
+| `3scale-databases` | `2-application-databases.yaml` | ambos | `gitops/databases/` |
+| `3scale-monitoring` | `3-application-monitoring.yaml` | **primário** | `gitops/monitoring/` — Grafana + dois datasources |
+| `3scale-ha-monitoring` | `3-application-ha-monitoring.yaml` | **HA** | `gitops/monitoring-ha/` — UWM + Route Prometheus |
+| `3scale-apimanager` | `4-application-apimanager.yaml` | **primário** | `gitops/apimanager/` |
+| `3scale-ha-apimanager` | `4-application-ha-apimanager.yaml` | **HA** | `gitops/apimanager-ha/` |
+| `3scale-apicast-selfmanaged` | `5-application-apicast-selfmanaged.yaml` | ambos | `gitops/apicast-selfmanaged/` |
+| `3scale-echoapi` | `6-application-echoapi.yaml` | ambos | `gitops/echoapi/` |
 
-### 5) Aprovar os Install Plans dos operadores (Manual) — depois sincronize os demais Applications
+### 5) Aprovar os Install Plans dos operadores (Manual)
 
-Os CRDs `APIManager` (3scale) e `Grafana`/`GrafanaDatasource` (Grafana Operator) só existem depois que os respectivos operadores (CSV) estão instalados. **Depois do sync do Application `3scale-operator`**, aprove os Install Plans. Quando todos os CSVs estiverem **Succeeded**, sincronize os Applications na ordem numérica: `3scale-monitoring` → `3scale-apimanager` (ou `3scale-ha-apimanager` no cluster HA) → demais.
+Os CRDs `APIManager` (3scale Operator), `APIcast` (APIcast Operator) e `Grafana`/`GrafanaDatasource` (Grafana Operator — somente no cluster primário) só existem após os respectivos operadores estarem instalados. **Após o sync do Application `3scale-operator`**, aprove os Install Plans em cada cluster e aguarde todos os CSVs ficarem **Succeeded** antes de sincronizar os demais Applications.
 
 ```bash
+# Repetir em cada cluster:
 oc -n 3scale-gitops get installplans
-# Aprove o Install Plan (substitua <nome> pelo nome retornado acima):
+# Aprovar cada Install Plan pendente (repita para cada <nome> retornado):
 oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
-# Aguarde o operador ficar instalado (CSV Succeeded):
+# Aguardar todos os operadores instalados (CSV Succeeded):
 oc -n 3scale-gitops get csv -w
-# Quando o CSV estiver Succeeded, sincronize o Application 3scale-apimanager no Argo CD
 ```
 
-### 6) URLs após a implantação
+Após os CSVs estarem Succeeded, sincronize os demais Applications na ordem numérica via Argo CD.
+
+### 6) (Modo 2 clusters) Conectar o datasource HA ao Grafana
+
+> Pule este passo se usar apenas 1 cluster.
+
+Após o sync de `3scale-ha-monitoring` no cluster HA, o Prometheus UWM deste cluster fica exposto via Route. Copie o token de acesso para o cluster primário e atualize a URL do datasource:
+
+```bash
+# No cluster HA — obter a URL do Route do Prometheus:
+oc login <HA_CLUSTER_API_URL>
+HA_PROM_URL=$(oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+  -o jsonpath='https://{.spec.host}')
+echo "Prometheus HA URL: ${HA_PROM_URL}"
+
+# No cluster HA — obter o bearer token do SA grafana-serviceaccount:
+HA_TOKEN=$(oc -n 3scale-gitops get secret grafana-sa-token -o jsonpath='{.data.token}' | base64 -d)
+
+# No cluster primário — criar o Secret com o token do cluster HA:
+oc login <PRIMARY_CLUSTER_API_URL>
+oc -n 3scale-gitops create secret generic grafana-ha-sa-token \
+  --from-literal=token="${HA_TOKEN}"
+```
+
+Em seguida, edite `gitops/monitoring/grafana-datasource-ha.yaml` e substitua `change-me-prometheus-uwm-ha-url` pela URL obtida (`${HA_PROM_URL}`). Faça commit e sincronize o Application `3scale-monitoring`.
+
+Para verificar o Grafana após os syncs:
+
+```bash
+oc login <PRIMARY_CLUSTER_API_URL>
+# Confirmar que o Prometheus UWM está ativo:
+oc -n openshift-user-workload-monitoring get pods
+# URL do Grafana:
+oc -n 3scale-gitops get route -l app=grafana -o jsonpath='{.items[0].spec.host}'
+```
+
+Credenciais padrão: `admin` / `change-me-grafana-password` (altere em `gitops/monitoring/grafana.yaml` antes do sync).
+
+### 7) URLs após a implantação
 
 Com `wildcardDomain` configurado (ex.: `apps.cluster-xxx.dynamic.redhatworkshops.io`):
 
@@ -137,7 +178,7 @@ Exemplo: se `wildcardDomain` for `apps.cluster-zrdcz.dynamic.redhatworkshops.io`
 - Admin: `https://3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
 - Master: `https://master.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
 
-### 7) Credenciais do Admin e Master Portal
+### 8) Credenciais do Admin e Master Portal
 
 Obtenha do Secret `system-seed` no namespace `3scale-gitops`:
 
@@ -155,7 +196,7 @@ oc -n 3scale-gitops get secret system-seed -o jsonpath='{.data.MASTER_USER}' | b
 oc -n 3scale-gitops get secret system-seed -o jsonpath='{.data.MASTER_PASSWORD}' | base64 -d; echo
 ```
 
-### 8) Testar as APIs (APIcast Self-Managed)
+### 9) Testar as APIs (APIcast Self-Managed)
 
 O APIcast Self-Managed usa hostnames customizados que precisam de `--resolve` para testes locais (não há DNS real apontando para eles). Obtenha o IP do router a partir da Route do console (presente em qualquer cluster OpenShift):
 
@@ -333,53 +374,32 @@ O monitoramento do 3scale usa o **OpenShift User Workload Monitoring (UWM)** —
 
 > Instalar um Prometheus Operator via OLM em paralelo ao stack de monitoramento do OpenShift causaria conflitos de ownership nos CRDs (`ServiceMonitor`, `PrometheusRule`, etc.), que são cluster-scoped e já gerenciados pelo operador interno. O UWM resolve isso sem operador adicional.
 
-### Arquitetura
+### Arquitetura (consolidada em um único Grafana)
+
+O Grafana fica instalado **somente no cluster primário** e consolida métricas dos dois clusters via dois datasources distintos. Cada cluster adiciona o label `cluster=primary` ou `cluster=ha` a todas as métricas via `externalLabels`, permitindo filtrar e comparar no mesmo dashboard.
 
 ```
-openshift-monitoring namespace:
-  ConfigMap cluster-monitoring-config  → ativa o UWM
+Cluster PRIMÁRIO                              Cluster HA
+─────────────────────────────────────────     ────────────────────────────────────
+openshift-monitoring:                         openshift-monitoring:
+  cluster-monitoring-config  → UWM ativo        cluster-monitoring-config  → UWM ativo
 
-openshift-user-workload-monitoring namespace:
-  prometheus-user-workload             → descobre ServiceMonitors em 3scale-gitops
-
-3scale-gitops namespace:
-  ServiceMonitors (3scale operator)    → backend-listener, system-app, zync, ...
-  ServiceMonitor (apicast-selfmanaged) → apicast-ha-production, apicast-ha-staging
-  Grafana CR                           → instância Grafana com Route OpenShift
-  GrafanaDatasource                    → aponta para prometheus-user-workload (bearer token)
+openshift-user-workload-monitoring:           openshift-user-workload-monitoring:
+  user-workload-monitoring-config              user-workload-monitoring-config
+    externalLabels: cluster=primary              externalLabels: cluster=ha
+  prometheus-user-workload (interno)           prometheus-user-workload
+                                               Route: prometheus-user-workload-external ──┐
+3scale-gitops namespace:                                                                   │
+  ServiceMonitors (3scale operator)           3scale-gitops namespace:                    │
+  ServiceMonitor apicast-selfmanaged            ServiceMonitors (3scale operator)         │
+  Grafana CR + Route                            ServiceMonitor apicast-selfmanaged        │
+  GrafanaDatasource "Prometheus Primary"      grafana-sa-token  (token copiado manualmente)
+  GrafanaDatasource "Prometheus HA"  ◄────────────────────────────────────────────────────┘
 ```
-
-### Bootstrap
-
-```bash
-# Aplicar em cada cluster (primário e HA):
-oc apply -f bootstrap/3-application-monitoring.yaml
-```
-
-Antes do primeiro sync, aprovar o Install Plan do Grafana Operator (instalado junto com os demais operadores no passo 1):
-
-```bash
-oc -n 3scale-gitops get installplans
-oc -n 3scale-gitops patch installplan <nome> -p '{"spec":{"approved":true}}' --type=merge
-# Aguardar o operador ficar instalado:
-oc -n 3scale-gitops get csv -w
-```
-
-Após o sync, verificar o UWM e obter a URL do Grafana:
-
-```bash
-# Confirmar que o Prometheus UWM está ativo:
-oc -n openshift-user-workload-monitoring get pods
-
-# URL do Grafana:
-oc -n 3scale-gitops get route -l app=grafana -o jsonpath='{.items[0].spec.host}'
-```
-
-Credenciais padrão: `admin` / `change-me-grafana-password` (altere em `gitops/monitoring/grafana.yaml` antes do sync).
 
 ### Métricas disponíveis
 
-O operador 3scale cria automaticamente ServiceMonitors para todos os componentes quando `spec.monitoring.enableServiceMonitors: true` está no APIManager. As principais métricas:
+O operador 3scale cria automaticamente ServiceMonitors para todos os componentes quando `spec.monitoring.enabled: true` está no APIManager. As principais métricas:
 
 | Componente | Métricas principais |
 |------------|---------------------|
@@ -397,7 +417,8 @@ O operador 3scale cria automaticamente ServiceMonitors para todos os componentes
 | `bootstrap/0-repo-credentials-secret.example.yaml` | Exemplo de Secret para repositório privado (Argo CD) |
 | `bootstrap/1-application-operator.yaml` | Argo CD Application `3scale-operator` (monitora `gitops/operator/`) |
 | `bootstrap/2-application-databases.yaml` | Argo CD Application `3scale-databases` (monitora `gitops/databases/`) |
-| `bootstrap/3-application-monitoring.yaml` | Argo CD Application `3scale-monitoring` (`gitops/monitoring/`) |
+| `bootstrap/3-application-monitoring.yaml` | Argo CD Application `3scale-monitoring` — cluster primário (`gitops/monitoring/`) |
+| `bootstrap/3-application-ha-monitoring.yaml` | Argo CD Application `3scale-ha-monitoring` — cluster HA (`gitops/monitoring-ha/`) |
 | `bootstrap/4-application-apimanager.yaml` | Argo CD Application `3scale-apimanager` — cluster primário (`gitops/apimanager/`) |
 | `bootstrap/4-application-ha-apimanager.yaml` | Argo CD Application `3scale-ha-apimanager` — cluster HA (`gitops/apimanager-ha/`) |
 | `bootstrap/5-application-apicast-selfmanaged.yaml` | Argo CD Application `3scale-apicast-selfmanaged` (`gitops/apicast-selfmanaged/`) |
@@ -421,11 +442,16 @@ O operador 3scale cria automaticamente ServiceMonitors para todos os componentes
 | `gitops/echoapi/3scale-capabilities.yaml` | CRs de capabilities: `Backend`, `Product` (user_key), `DeveloperAccount`, `DeveloperUser`, `Application` |
 | `gitops/echoapi/echoapi-product-oidc.yaml` | `Product` OIDC + Token Introspection e `Application` correspondente |
 | `gitops/echoapi/echoapi-product-rhbk-auth.yaml` | `Product` RHBK Auth (`default_credentials` + `token_introspection`) e `Application` anônima |
-| `gitops/monitoring/uwm-enable.yaml` | ConfigMap que habilita o User Workload Monitoring em `openshift-monitoring` |
+| `gitops/monitoring/uwm-enable.yaml` | Habilita UWM (`openshift-monitoring`) + configura `externalLabels: cluster=primary` (`openshift-user-workload-monitoring`) |
 | `gitops/monitoring/grafana-rbac.yaml` | ServiceAccount + Secret token + ClusterRoleBinding `cluster-monitoring-view` para o Grafana |
 | `gitops/monitoring/grafana.yaml` | Grafana CR com Route OpenShift (Grafana Operator v5) |
-| `gitops/monitoring/grafana-datasource.yaml` | GrafanaDatasource apontando para o Prometheus UWM com bearer token |
+| `gitops/monitoring/grafana-datasource.yaml` | GrafanaDatasource "Prometheus Primary" — Prometheus UWM local (interno) |
+| `gitops/monitoring/grafana-datasource-ha.yaml` | GrafanaDatasource "Prometheus HA" — Prometheus UWM do cluster HA (Route externo) |
 | `gitops/monitoring/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed (porta `metrics` 9421) |
+| `gitops/monitoring-ha/uwm-enable.yaml` | Habilita UWM + configura `externalLabels: cluster=ha` no cluster HA |
+| `gitops/monitoring-ha/grafana-rbac.yaml` | SA + token para autenticação cross-cluster pelo Grafana do cluster primário |
+| `gitops/monitoring-ha/prometheus-route.yaml` | Route externo expondo o Prometheus UWM do cluster HA para o Grafana do primário |
+| `gitops/monitoring-ha/servicemonitor-apicast.yaml` | ServiceMonitor para os pods APIcast Self-Managed do cluster HA |
 | `ECHOAPI_MANUAL_STEPS.md` | Passos manuais para `ProxyConfigPromote` e teste externo do Echo API (user_key) |
 | `ECHOAPI_OIDC_MANUAL_STEPS.md` | Passos manuais para Echo API OIDC: secret Zync, roles Keycloak, token e teste |
 | `ECHOAPI_RHBK_AUTH_MANUAL_STEPS.md` | Passos manuais para Echo API RHBK Auth: ProxyConfigPromote e teste com Bearer token Keycloak |

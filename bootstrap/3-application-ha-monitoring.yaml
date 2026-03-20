@@ -1,0 +1,40 @@
+# Argo CD Application — Monitoramento 3scale HA (UWM + Route Prometheus)
+#
+# Gerencia a configuração de monitoramento do 3scale no cluster HA:
+#   - Habilitação do OpenShift User Workload Monitoring (UWM) com label cluster=ha
+#   - RBAC do ServiceAccount grafana-serviceaccount (token usado pelo Grafana do cluster primário)
+#   - Route externo expondo o Prometheus UWM deste cluster para o Grafana do cluster primário
+#   - ServiceMonitor para os pods APIcast Self-Managed do cluster HA
+#
+# NÃO instala Grafana neste cluster — o Grafana está centralizado no cluster primário,
+# consultando os dois datasources (Prometheus Primary + Prometheus HA).
+#
+# Aplicado ANTES do APIManager (4-application-ha-apimanager.yaml) para garantir que o
+# Prometheus UWM já esteja ativo quando o operador 3scale criar os ServiceMonitors.
+#
+# Aplicar NO cluster HA:
+#   oc login <HA_CLUSTER_API_URL>
+#   oc apply -f bootstrap/3-application-ha-monitoring.yaml
+#
+# APÓS o sync, obter a URL do Route para configurar no cluster primário:
+#   oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+#     -o jsonpath='https://{.spec.host}'
+# Atualizar este valor em:
+#   gitops/monitoring/grafana-datasource-ha.yaml → datasource.url
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 3scale-ha-monitoring
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/luizfao/3scale.git
+    targetRevision: main
+    path: gitops/monitoring-ha
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: 3scale-gitops
+  syncPolicy: {}

@@ -1,0 +1,31 @@
+# ServiceMonitor para os pods APIcast Self-Managed do cluster HA (production + staging).
+#
+# Métricas coletadas aqui incluirão o label cluster=ha (configurado via external_labels
+# em uwm-enable.yaml), permitindo distinção no Grafana em relação ao cluster primário.
+#
+# Métricas expostas pelo APIcast:
+#   nginx_http_requests_total        — total de requisições por serviço/status
+#   nginx_up                         — estado dos workers nginx
+#   openresty_shdict_capacity_bytes  — uso de memória compartilhada
+#   threescale_backend_calls_total   — chamadas ao 3scale backend (authorize/report)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: apicast-selfmanaged
+  namespace: 3scale-gitops
+  labels:
+    app: apicast
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/managed-by
+        operator: In
+        values:
+          - apicast-operator
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      scheme: http

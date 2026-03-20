@@ -1,11 +1,5 @@
-# Habilita o User Workload Monitoring (UWM) no OpenShift.
-# O UWM provisiona um Prometheus dedicado (prometheus-user-workload) no namespace
-# openshift-user-workload-monitoring, que descobre automaticamente ServiceMonitors
-# e PodMonitors em todos os namespaces de usuário (incluindo 3scale-gitops).
-#
-# IMPORTANTE: Este ConfigMap é aplicado em 'openshift-monitoring', não em '3scale-gitops'.
-# O Argo CD respeita o campo 'namespace' do manifesto e aplica no namespace correto,
-# desde que o ServiceAccount openshift-gitops tenha permissão de escrita em openshift-monitoring.
+# Habilita o User Workload Monitoring (UWM) no cluster HA.
+# Mesmo ConfigMap do cluster primário — apenas ativa o UWM.
 #
 # Verificar após o sync:
 #   oc -n openshift-user-workload-monitoring get pods
@@ -21,15 +15,13 @@ data:
   config.yaml: |
     enableUserWorkload: true
 ---
-# Configura o Prometheus UWM do cluster PRIMÁRIO com external_labels.
-# O label cluster=primary é adicionado a todas as métricas coletadas neste cluster,
-# permitindo distingui-las das métricas do cluster HA no Grafana.
+# Configura o Prometheus UWM do cluster HA com external_labels.
+# O label cluster=ha é adicionado a todas as métricas coletadas neste cluster,
+# permitindo ao Grafana (hospedado no cluster primário) distinguir as origens.
 #
 # NOTA: O namespace openshift-user-workload-monitoring só existe após o UWM ser habilitado
 # (ConfigMap acima). Na primeira execução deste Application o sync pode falhar para este
 # recurso. Execute o sync novamente após o UWM estar ativo (pods Running).
-# A annotation SkipDryRunOnMissingResource evita erro de validação quando o namespace
-# ainda não existe.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -42,4 +34,4 @@ data:
   config.yaml: |
     prometheus:
       externalLabels:
-        cluster: primary
+        cluster: ha

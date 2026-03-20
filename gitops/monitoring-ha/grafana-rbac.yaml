@@ -1,0 +1,44 @@
+# ServiceAccount e token para o cluster HA — utilizados pelo Grafana do cluster PRIMÁRIO
+# para autenticar no Prometheus UWM deste cluster HA.
+#
+# O token gerado pelo Secret abaixo deve ser copiado para o cluster primário:
+#   oc -n 3scale-gitops get secret grafana-sa-token -o jsonpath='{.data.token}' | base64 -d
+#
+# Ver instruções completas em:
+#   gitops/monitoring/grafana-datasource-ha.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-serviceaccount
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+# Secret do tipo service-account-token: o OpenShift preenche automaticamente o campo
+# 'token' com um JWT de longa duração vinculado ao ServiceAccount acima.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-sa-token
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    kubernetes.io/service-account.name: grafana-serviceaccount
+type: kubernetes.io/service-account-token
+---
+# Permite ao grafana-serviceaccount ler métricas do Prometheus UWM via ClusterRole
+# 'cluster-monitoring-view' (built-in no OpenShift).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-serviceaccount-monitoring-view
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: grafana-serviceaccount
+    namespace: 3scale-gitops

@@ -1,0 +1,55 @@
+# Secret com o bearer token do grafana-serviceaccount do cluster HA.
+# Este token permite ao Grafana do cluster primário consultar o Prometheus UWM do cluster HA.
+#
+# Preencher manualmente após instalar o monitoring no cluster HA:
+#
+#   1. Obter o token do cluster HA:
+#      oc login <HA_CLUSTER_API_URL>
+#      HA_TOKEN=$(oc -n 3scale-gitops get secret grafana-sa-token -o jsonpath='{.data.token}' | base64 -d)
+#
+#   2. Obter a URL do Route exposto no cluster HA:
+#      HA_PROM_URL=$(oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+#        -o jsonpath='https://{.spec.host}')
+#
+#   3. Criar o Secret no cluster PRIMÁRIO:
+#      oc login <PRIMARY_CLUSTER_API_URL>
+#      oc -n 3scale-gitops create secret generic grafana-ha-sa-token \
+#        --from-literal=token="${HA_TOKEN}"
+#
+#   4. Atualizar a URL do datasource abaixo com o valor de ${HA_PROM_URL} e fazer novo sync.
+#
+# ATENÇÃO: Este Secret não deve ser gerenciado pelo Argo CD (contém credenciais).
+# Criar manualmente no cluster conforme instruções acima.
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: prometheus-user-workload-ha
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  valuesFrom:
+    - targetPath: "prometheusToken"
+      valueFrom:
+        secretKeyRef:
+          name: grafana-ha-sa-token
+          key: token
+  datasource:
+    name: Prometheus HA
+    type: prometheus
+    access: proxy
+    # Substituir pela URL do Route criado no cluster HA (prometheus-route.yaml em monitoring-ha/).
+    # Obter com: oc -n openshift-user-workload-monitoring get route prometheus-user-workload-external \
+    #              -o jsonpath='https://{.spec.host}'
+    url: https://change-me-prometheus-uwm-ha-url
+    isDefault: false
+    jsonData:
+      tlsSkipVerify: true
+      timeInterval: 30s
+      httpMethod: POST
+      httpHeaderName1: "Authorization"
+    secureJsonData:
+      httpHeaderValue1: "Bearer ${prometheusToken}"
