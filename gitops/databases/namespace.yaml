@@ -6,3 +6,4 @@ metadata:
     argocd.argoproj.io/sync-wave: "-30"
   labels:
     app.kubernetes.io/name: 3scale-databases
+    argocd.argoproj.io/managed-by: openshift-gitops
