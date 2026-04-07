@@ -6,3 +6,4 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
   labels:
     app.kubernetes.io/name: echoapi
+    argocd.argoproj.io/managed-by: openshift-gitops
