@@ -58,15 +58,15 @@ spec:
         auth_type: user_key
         user_key: "rhbk-anon-key"
     # 2. Token Introspection — valida Bearer JWT emitido pelo Keycloak (realm rhbk).
-    #    Reusa o client 4d045da9 já existente para chamar o endpoint de introspeção.
+    #    Reusa o client d2e33134 já existente para chamar o endpoint de introspeção.
     #    Se { "active": false }, APIcast rejeita com 403.
     - name: token_introspection
       version: builtin
       enabled: true
       configuration:
         auth_type: client_id+client_secret
-        client_id: "4d045da9"
-        client_secret: "a3de2050e258e641f8aa643b2a39ffb6" # notsecret - test data
+        client_id: "d2e33134"
+        client_secret: "54afa66a3d030da9daf7cdecb966e3fa" # notsecret - test data
         introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/realms/rhbk/protocol/openid-connect/token/introspect"
         max_ttl_tokens: 60
         max_cached_tokens: 100

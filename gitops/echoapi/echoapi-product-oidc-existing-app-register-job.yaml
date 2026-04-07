@@ -1,0 +1,211 @@
+# Job: cria a Application 3scale (OIDC) com client_id e client_secret já definidos via Account Management API.
+#
+# O CRD Application do operador não suporta application_id / credenciais OAuth; o Porta expõe isso na API:
+#   POST /admin/api/accounts/{account_id}/applications.json
+#   parâmetros: access_token, plan_id, name, description, application_id, application_key[]
+# Ver: 3scale Porta Admin::Api::BuyersApplicationsController#create
+#
+# O service (produto) NÃO vai no body do create: o plan_id já identifica o Application Plan e esse
+# plano pertence a um único service. O PRODUCT_SYSTEM_NAME só serve para localizar service_id via
+# GET /admin/api/services.json e listar planos em GET /admin/api/services/{service_id}/application_plans.json
+# antes de obter o plan_id numérico usado no POST.
+#
+# Pré-requisitos:
+#   - Product/Service e Application Plan já existem no 3scale (sync do Product CR).
+#   - DeveloperAccount com org_name = ACCOUNT_ORG_NAME.
+#   - Secret myapi-oidc-3scale-management com adminURL + token (access token com scope Account Management API).
+#   - Secret myapi-oidc-existing-app-client com clientId + clientSecret (Keycloak existente).
+#
+# O Job é idempotente: se já existir aplicação com o mesmo application_id ou nome, termina com sucesso.
+#
+# A Application 3scale com application_id (client OIDC) e secret pré-definidos NÃO é criada por um
+# CR Application (o operador não expõe esses campos). Aplique em paralelo:
+#   echoapi-product-oidc-existing-app-register-job.yaml
+# que usa a Account Management API (POST .../accounts/{id}/applications) com application_id e
+# application_key[].
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myapi-oidc-issuer
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+type: Opaque
+stringData:
+  # Substitua pelo client_id e client_secret do cliente existente; host e realm conforme o ambiente.
+  issuerEndpoint: "https://3scale-zync:jpuYKK4yELQlAn1PrpBFFVVmHk0y48Xl@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk" # notsecret - test data
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myapi-oidc-3scale-management
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+type: Opaque
+stringData:
+  # secret do tenant
+  adminURL: "https://3scale-admin.apps.cluster-bcb52.dynamic.redhatworkshops.io"
+  token: "cWtX7IDeX234E2bF" # notsecret - test data
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myapi-oidc-register-application-script
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "9"
+data:
+  register.py: |
+    #!/usr/bin/env python3
+    """Registra aplicação OIDC no 3scale com client_id e client_secret do Keycloak pré-definidos."""
+    import json
+    import os
+    import sys
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    def die(msg, code=1):
+        print(msg, file=sys.stderr)
+        sys.exit(code)
+
+    def getenv(name, default=None):
+        v = os.environ.get(name, default)
+        if not v:
+            die(f"Variável de ambiente obrigatória ausente ou vazia: {name}")
+        return v
+
+    def unwrap(entry, *keys):
+        for k in keys:
+            if k in entry and isinstance(entry[k], dict):
+                return entry[k]
+        return entry
+
+    def api_get(admin, path, token):
+        q = urllib.parse.urlencode({"access_token": token})
+        url = f"{admin}{path}?{q}"
+        req = urllib.request.Request(url, method="GET", headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read().decode())
+
+    def api_post_form(admin, path, token, pairs):
+        data = urllib.parse.urlencode(pairs + [("access_token", token)]).encode()
+        req = urllib.request.Request(
+            admin + path,
+            data=data,
+            method="POST",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return r.status, json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode(errors="replace") if e.fp else ""
+            try:
+                parsed = json.loads(raw) if raw else None
+            except json.JSONDecodeError:
+                parsed = raw
+            return e.code, parsed
+
+    admin = getenv("ADMIN_URL").rstrip("/")
+    token = getenv("ACCESS_TOKEN")
+    org_name = getenv("ACCOUNT_ORG_NAME", "Echo API Org")
+    product_sn = getenv("PRODUCT_SYSTEM_NAME", "myapi_oidc_existing")
+    plan_sn = getenv("PLAN_SYSTEM_NAME", "basic-myapi-oidc")
+    app_name = getenv("APP_NAME")
+    app_desc = os.environ.get("APP_DESCRIPTION", "")
+    client_id = getenv("CLIENT_ID")
+    client_secret = getenv("CLIENT_SECRET")
+
+    accounts_resp = api_get(admin, "/admin/api/accounts.json", token)
+    account_id = None
+    for w in accounts_resp.get("accounts", []):
+        acc = unwrap(w, "account")
+        if acc.get("org_name") == org_name:
+            account_id = acc.get("id")
+            break
+    if account_id is None:
+        die(f"Conta de desenvolvedor com org_name={org_name!r} não encontrada no 3scale")
+
+    services_resp = api_get(admin, "/admin/api/services.json", token)
+    service_id = None
+    for w in services_resp.get("services", []):
+        svc = unwrap(w, "service")
+        if svc.get("system_name") == product_sn:
+            service_id = svc.get("id")
+            break
+    if service_id is None:
+        die(
+            f"Service (produto) com system_name={product_sn!r} não encontrado — "
+            f"sincronize o Product CR antes de executar este job"
+        )
+
+    plans_resp = api_get(admin, f"/admin/api/services/{service_id}/application_plans.json", token)
+    plan_rows = plans_resp.get("plans") or plans_resp.get("application_plans") or []
+    plan_id = None
+    plan_obj = None
+    for w in plan_rows:
+        p = unwrap(w, "plan", "application_plan")
+        if p.get("system_name") == plan_sn:
+            plan_id = p.get("id")
+            plan_obj = p
+            break
+    if plan_id is None:
+        die(
+            f"Plano de aplicação com system_name={plan_sn!r} não encontrado "
+            f"para o service id={service_id}"
+        )
+
+    psid = plan_obj.get("service_id") if plan_obj else None
+    if psid is not None and int(psid) != int(service_id):
+        die(
+            f"Inconsistência: plano id={plan_id} tem service_id={psid!r}, "
+            f"esperado id={service_id!r} (system_name do produto={product_sn!r})"
+        )
+
+    print(
+        f"Enviando POST para criar aplicação: account_id={account_id}, plan_id={plan_id} "
+        f"(produto system_name={product_sn!r}, service_id={service_id}; "
+        f"plano system_name={plan_sn!r})",
+        file=sys.stderr,
+    )
+
+    apps_resp = api_get(admin, f"/admin/api/accounts/{account_id}/applications.json", token)
+    for w in apps_resp.get("applications", []):
+        app = unwrap(w, "application")
+        aid = app.get("application_id")
+        if aid is not None and str(aid) == str(client_id):
+            print(
+                f"OK: aplicação já existe (id={app.get('id')}, application_id={aid})",
+                file=sys.stderr,
+            )
+            print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
+            sys.exit(0)
+        if app.get("name") == app_name:
+            print(
+                f"OK: já existe aplicação com nome {app_name!r} (id={app.get('id')})",
+                file=sys.stderr,
+            )
+            print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
+            sys.exit(0)
+
+    pairs = [
+        ("plan_id", str(plan_id)),
+        ("name", app_name),
+        ("description", app_desc),
+        ("application_id", client_id),
+        ("application_key[]", client_secret),
+    ]
+    code, body = api_post_form(
+        admin, f"/admin/api/accounts/{account_id}/applications.json", token, pairs
+    )
+    if code in (200, 201):
+        app = unwrap(body, "application") if isinstance(body, dict) else body
+        print(json.dumps({"criado": True, "aplicacao": app}, indent=2, ensure_ascii=False))
+        sys.exit(0)
+    die(f"Falha ao criar aplicação — HTTP {code}: {body!r}", 2)

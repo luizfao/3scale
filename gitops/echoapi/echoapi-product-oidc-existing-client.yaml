@@ -1,0 +1,160 @@
+# Produto 3scale com autenticação OIDC (APIcast self-managed) — cliente OAuth/OIDC já existente no Keycloak
+#
+# Requer no mesmo namespace: Backend echoapi_backend e DeveloperAccount echoapi-account (ex.: 3scale-capabilities.yaml).
+#
+# Compatível com 3scale 2.16 e capabilities.3scale.net/v1beta1 do operador na branch 3scale-2.16-stable.
+# Ref: https://github.com/3scale/3scale-operator/blob/3scale-2.16-stable/doc/product-reference.md#OIDCSpec
+#
+# O issuer do 3scale para Keycloak usa o client_id e o client_secret de um cliente confidencial
+# *já criado* no realm, embutidos na URL (não é obrigatório usar o client "3scale-zync"):
+#   https://CLIENT_ID:CLIENT_SECRET@KEYCLOAK_HOST/realms/REALM
+# (Keycloak moderno: sem prefixo /auth; SSO antigo: /auth/realms/REALM)
+# Se id ou secret tiverem caracteres especiais, use percent-encoding na URL (RFC 3986).
+#
+# Ajuste authenticationFlow para espelhar o que está habilitado nesse cliente no Keycloak
+# (padrões abaixo são apenas exemplo).
+#
+# Antes do sync: preencha os Secrets abaixo (ou External Secrets / SealedSecrets).
+# Após o sync: promova o Proxy no admin 3scale e teste com Bearer token emitido para esse client/realm.
+#
+# Cliente OAuth/OIDC no Keycloak já existente para a aplicação consumidora — usado pelo Job
+# echoapi-product-oidc-existing-app-register-job.yaml ao chamar a API (application_id + application_key).
+# O claim JWT do produto (ex.: azp) deve corresponder a este clientId.
+apiVersion: capabilities.3scale.net/v1beta1
+kind: Product
+metadata:
+  name: myapi-product-oidc-existing
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  name: My API OIDC (cliente existente)
+  systemName: myapi_oidc_existing
+  deployment:
+    apicastSelfManaged:
+      stagingPublicBaseURL: "http://myapi-oidc-staging.example.com"
+      productionPublicBaseURL: "http://myapi-oidc.example.com"
+      authentication:
+        oidc:
+          issuerType: keycloak
+          issuerEndpointRef:
+            name: myapi-oidc-issuer
+          authenticationFlow:
+            standardFlowEnabled: false
+            implicitFlowEnabled: false
+            serviceAccountsEnabled: true
+            directAccessGrantsEnabled: true
+          jwtClaimWithClientID: azp
+          jwtClaimWithClientIDType: plain
+  backendUsages:
+    echoapi_backend:
+      path: /
+  mappingRules:
+    - httpMethod: GET
+      pattern: /
+      increment: 1
+      metricMethodRef: hits
+  applicationPlans:
+    basic-myapi-oidc:
+      name: Basic MyAPI OIDC
+  policies:
+    - name: apicast
+      version: builtin
+      enabled: true
+      configuration: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myapi-oidc-existing-app-client
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+type: Opaque
+stringData:
+  clientId: "d2e33134"
+  clientSecret: "54afa66a3d030da9daf7cdecb966e3fa" # notsecret - test data
+  accountOrgName: "Echo API Org"
+  productSystemName: "myapi_oidc_existing"
+  planSystemName: "basic-myapi-oidc"
+  appName: "myapi_oidc_existing_application"
+  appDescription: "Criada via API com client Keycloak existente (Job GitOps)"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: myapi_oidc_existing_application # name do application
+  namespace: 3scale-gitops
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: register
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              python3 /scripts/register.py
+          env:
+            - name: ADMIN_URL
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-3scale-management
+                  key: adminURL
+            - name: ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-3scale-management
+                  key: token
+            - name: ACCOUNT_ORG_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: accountOrgName
+            - name: PRODUCT_SYSTEM_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: productSystemName
+            - name: PLAN_SYSTEM_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: planSystemName
+            - name: APP_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: appName
+            - name: APP_DESCRIPTION
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: appDescription
+            - name: CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: clientId
+            - name: CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-existing-app-client
+                  key: clientSecret
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: myapi-oidc-register-application-script
+            defaultMode: 0444
