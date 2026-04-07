@@ -176,9 +176,9 @@ Com `wildcardDomain` configurado (ex.: `apps.cluster-xxx.dynamic.redhatworkshops
 - **Master Admin Portal** (criar outros tenants):
   - `https://master.<wildcardDomain>`
 
-Exemplo: se `wildcardDomain` for `apps.cluster-zrdcz.dynamic.redhatworkshops.io`:
-- Admin: `https://3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
-- Master: `https://master.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
+Exemplo: se `wildcardDomain` for `apps.cluster-bcb52.dynamic.redhatworkshops.io`:
+- Admin: `https://3scale-admin.apps.cluster-bcb52.dynamic.redhatworkshops.io`
+- Master: `https://master.apps.cluster-bcb52.dynamic.redhatworkshops.io`
 
 ### 8) Credenciais do Admin e Master Portal
 

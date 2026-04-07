@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/luizfao/3scale.git
-    targetRevision: main
+    targetRevision: bcb52
     path: gitops/echoapi
     directory:
       recurse: true

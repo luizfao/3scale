@@ -38,7 +38,7 @@
 #     argocd.argoproj.io/sync-wave: "-1"
 # type: Opaque
 # stringData:
-#   AdminPortalURL: "https://CHANGE_ME_ADMIN_ACCESS_TOKEN@3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+#   AdminPortalURL: "https://CHANGE_ME_ADMIN_ACCESS_TOKEN@3scale-admin.apps.cluster-bcb52.dynamic.redhatworkshops.io"
 ---
 # APIcast de produção — responde na URL independente gerenciada pelo LB externo.
 # deploymentEnvironment: production usa configuração em cache (boot-loaded),

@@ -15,7 +15,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/luizfao/3scale.git
-    targetRevision: main
+    targetRevision: bcb52
     path: gitops/apimanager
   destination:
     server: https://kubernetes.default.svc

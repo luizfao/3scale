@@ -67,7 +67,7 @@ spec:
         auth_type: client_id+client_secret
         client_id: "4d045da9"
         client_secret: "a3de2050e258e641f8aa643b2a39ffb6" # notsecret - test data
-        introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk/protocol/openid-connect/token/introspect"
+        introspection_url: "https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/realms/rhbk/protocol/openid-connect/token/introspect"
         max_ttl_tokens: 60
         max_cached_tokens: 100
     # 3. APIcast — processamento padrão: authrep ao 3scale backend com a user_key padrão.

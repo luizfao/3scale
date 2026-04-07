@@ -10,7 +10,7 @@ metadata:
     # APIManager CRD is created by the 3scale operator; use a later wave so operator can be installed (and Install Plan approved) first
     argocd.argoproj.io/sync-wave: "5"
 spec:
-  wildcardDomain: apps.cluster-zrdcz.dynamic.redhatworkshops.io
+  wildcardDomain: apps.cluster-bcb52.dynamic.redhatworkshops.io
   # 2.16 requires external System DB + Redis; Zync DB is kept internal (operator-managed).
   externalComponents:
     backend:

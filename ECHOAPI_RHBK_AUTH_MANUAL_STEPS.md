@@ -109,7 +109,7 @@ echo "Router IP: ${ROUTER_IP}"
 ### 2.Obter um `CLIENT_ID` e `CLIENT_SECRET` do RHBK
 
 **Via Admin Portal do Keycloak:**
-1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/master/console/#/rhbk`
+1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/admin/master/console/#/rhbk`
 2. Vá em **Clients** — procure por um client
 3. Vá em **Credentials** — clique no botão para revelar a secret para confirmar
 
@@ -143,7 +143,7 @@ CLIENT_SECRET=client_secret
 **Opção A — Client Credentials (service account):**
 
 ```bash
-KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io"
 REALM=rhbk
 #CLIENT_ID= # Obtido no comando anterior
 #CLIENT_SECRET= # Obtido no comando anterior
@@ -159,7 +159,7 @@ echo "Token obtido: $([ -n "$TOKEN" ] && echo 'OK' || echo 'FALHOU')"
 **Opção B — Resource Owner Password (usuário LDAP, ex.: ldaptest):**
 
 ```bash
-KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io"
 #CLIENT_ID= # Obtido no comando anterior
 #CLIENT_SECRET= # Obtido no comando anterior
 

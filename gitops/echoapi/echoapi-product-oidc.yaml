@@ -31,8 +31,8 @@ spec:
           issuerType: "keycloak"
           # Format: https://CLIENT_ID:CLIENT_SECRET@KEYCLOAK_HOST/realms/REALM
           # Update 'change-me-zync-secret' to match the secret in Keycloak > Clients > 3scale-zync > Credentials
-          # issuerEndpoint: "https://3scale-zync:change-me-zync-secret@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
-          issuerEndpoint: "https://3scale-zync:QA70oZxWHPjlVIsNWEgf38z9xUtp50bt@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk" # notsecret - test data
+          # issuerEndpoint: "https://3scale-zync:change-me-zync-secret@rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/realms/rhbk"
+          issuerEndpoint: "https://3scale-zync:QA70oZxWHPjlVIsNWEgf38z9xUtp50bt@rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/realms/rhbk" # notsecret - test data
           authenticationFlow:
             standardFlowEnabled: false
             implicitFlowEnabled: false

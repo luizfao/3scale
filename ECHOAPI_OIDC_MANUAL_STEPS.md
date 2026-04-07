@@ -8,7 +8,7 @@ conflitos com clients já existentes no realm.
 ## Pré-requisitos
 
 - Cluster acessível via `oc login`
-- Acesso ao Admin Portal do Keycloak em `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/rhbk/console/`
+- Acesso ao Admin Portal do Keycloak em `https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/admin/rhbk/console/`
 - Argo CD Application `3scale-echoapi` ainda **não** sincronizado com este produto (faça o sync após o passo 2)
 
 ---
@@ -21,7 +21,7 @@ de introspecção de tokens.
 
 ### Via Admin Portal do Keycloak
 
-1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/rhbk/console/`
+1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/admin/rhbk/console/`
 2. Vá em **Clients** → **Create client**
 3. Preencha:
    - **Client type**: `OpenID Connect`
@@ -41,7 +41,7 @@ de introspecção de tokens.
 ### (Ainda não testado) Via kcadm (alternativa CLI)
 
 ```bash
-KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io"
 REALM="rhbk"
 ADMIN_PASS="$(oc -n rhbk-gitops get secret rhbk-initial-admin -o jsonpath='{.data.password}' | base64 -d)"
 
@@ -92,7 +92,7 @@ clients OIDC no Keycloak automaticamente.
 ### (Ainda não testado) Via kcadm (alternativa CLI)
 
 ```bash
-KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io"
 REALM="rhbk"
 ADMIN_USER="admin"
 ADMIN_PASS="$(oc -n rhbk-gitops get secret rhbk-initial-admin -o jsonpath='{.data.password}' | base64 -d)"
@@ -145,7 +145,7 @@ Com o secret do client `3scale-zync` obtido no passo 1, atualize o campo
 `issuerEndpoint` em `gitops/echoapi/echoapi-product-oidc.yaml`:
 
 ```yaml
-issuerEndpoint: "https://3scale-zync:<SEU_SECRET_AQUI>@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk"
+issuerEndpoint: "https://3scale-zync:<SEU_SECRET_AQUI>@rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/realms/rhbk"
 ```
 
 Faça commit, push e sincronize o Argo CD Application `3scale-echoapi`.
@@ -232,13 +232,13 @@ CLIENT_SECRET=client_secret
 ``` 
 
 **Via Admin Portal do 3scale:**
-1. Acesse: `https://3scale-admin.apps.cluster-zrdcz.dynamic.redhatworkshops.io`
+1. Acesse: `https://3scale-admin.apps.cluster-bcb52.dynamic.redhatworkshops.io`
 2. Vá em **Audience** → **Accounts** → `Echo API Org` → **Applications**
 3. Clique em `Echo API OIDC App`
 4. Anote o **Client ID** e o **Client Secret** mostrados em **API Credentials**
 
 **Via Admin Portal do Keycloak (confirmar):**
-1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/admin/master/console/#/rhbk`
+1. Acesse: `https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io/admin/master/console/#/rhbk`
 2. Vá em **Clients** — procure pelo client_id obtido no passo anterior
 3. Vá em **Credentials** — clique no botão para revelar a secret para confirmar
 
@@ -258,7 +258,7 @@ oc -n 3scale-gitops create secret generic echoapi-product-oidc-credentials \
 Com o `client_id` e `client_secret` obtidos no passo 6, gere um token via Client Credentials:
 
 ```bash
-KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io"
+KEYCLOAK_URL="https://rhbk-rhbk-gitops.apps.cluster-bcb52.dynamic.redhatworkshops.io"
 REALM="rhbk"
 CLIENT_ID="<client_id da aplicação>"
 CLIENT_SECRET="<client_secret da aplicação>"

@@ -23,7 +23,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/luizfao/3scale.git
-    targetRevision: main
+    targetRevision: bcb52
     path: gitops/apimanager-ha
   destination:
     server: https://kubernetes.default.svc   # local ao cluster HA
