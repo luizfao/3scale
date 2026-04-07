@@ -72,7 +72,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
 type: Opaque
 stringData:
-  clientId: "d2e33134"
+  clientId: "a2e33131"
   clientSecret: "54afa66a3d030da9daf7cdecb966e3fa" # notsecret - test data
   accountOrgName: "Echo API Org"
   productSystemName: "myapi_oidc_existing"

@@ -114,11 +114,11 @@ data:
 
     admin = getenv("ADMIN_URL").rstrip("/")
     token = getenv("ACCESS_TOKEN")
-    org_name = getenv("ACCOUNT_ORG_NAME", "Echo API Org")
-    product_sn = getenv("PRODUCT_SYSTEM_NAME", "myapi_oidc_existing")
-    plan_sn = getenv("PLAN_SYSTEM_NAME", "basic-myapi-oidc")
+    org_name = getenv("ACCOUNT_ORG_NAME")
+    product_sn = getenv("PRODUCT_SYSTEM_NAME")
+    plan_sn = getenv("PLAN_SYSTEM_NAME")
     app_name = getenv("APP_NAME")
-    app_desc = os.environ.get("APP_DESCRIPTION", "")
+    app_desc = os.environ.get("APP_DESCRIPTION")
     client_id = getenv("CLIENT_ID")
     client_secret = getenv("CLIENT_SECRET")
 
