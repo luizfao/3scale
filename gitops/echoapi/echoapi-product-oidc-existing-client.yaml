@@ -77,13 +77,13 @@ stringData:
   accountOrgName: "Echo API Org"
   productSystemName: "myapi_oidc_existing"
   planSystemName: "basic-myapi-oidc"
-  appName: "myapi_oidc_existing_application"
+  appName: "myapi-product-oidc-existing-application"
   appDescription: "Criada via API com client Keycloak existente (Job GitOps)"
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: myapi_oidc_existing_application # name do application
+  name: myapi-product-oidc-existing-application # name do application
   namespace: 3scale-gitops
   annotations:
     argocd.argoproj.io/hook: PostSync
