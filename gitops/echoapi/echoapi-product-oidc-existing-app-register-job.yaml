@@ -56,8 +56,6 @@ kind: ConfigMap
 metadata:
   name: myapi-oidc-register-application-script
   namespace: 3scale-gitops
-  annotations:
-    argocd.argoproj.io/sync-wave: "9"
 data:
   register.py: |
     #!/usr/bin/env python3
@@ -147,6 +145,8 @@ data:
                     file=sys.stderr,
                 )
                 return
+            
+            print(f"JSON da aplicação retornado pela API:\n{json.dumps(app, indent=2, ensure_ascii=False)}", file=sys.stderr)
             die(
                 "Não foi possível obter client_secret da aplicação na resposta da API do 3scale; "
                 "não é possível validar."
@@ -158,6 +158,9 @@ data:
                 "é diferente do client_secret esperado (Keycloak / variável CLIENT_SECRET).",
                 file=sys.stderr,
             )
+            print(f"Secret esperado (Keycloak): {expected_secret!r}", file=sys.stderr)
+            print(f"Secret remoto (3scale): {remote!r}", file=sys.stderr)
+            print(f"JSON da aplicação retornado pela API:\n{json.dumps(app, indent=2, ensure_ascii=False)}", file=sys.stderr)
             die("Validação de client_secret falhou — os secrets não coincidem.", 2)
 
     def main():
