@@ -87,12 +87,12 @@ metadata:
   namespace: 3scale-gitops
   annotations:
     argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
-  backoffLimit: 5
+  backoffLimit: 3
   template:
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       containers:
         - name: register
           image: registry.access.redhat.com/ubi9/python-311:latest
