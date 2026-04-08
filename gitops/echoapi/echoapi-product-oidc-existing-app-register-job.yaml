@@ -16,7 +16,9 @@
 #   - Secret myapi-oidc-3scale-management com adminURL + token (access token com scope Account Management API).
 #   - Secret myapi-oidc-existing-app-client com clientId + clientSecret (Keycloak existente).
 #
-# O Job é idempotente: se já existir aplicação com o mesmo application_id ou nome, termina com sucesso.
+# O Job é idempotente: se já existir aplicação com o mesmo application_id ou nome, valida se o
+# client_secret no 3scale coincide com CLIENT_SECRET (Keycloak); se não coincidir, falha com erro.
+# Após create, compara quando a API expõe o secret; caso contrário emite aviso e segue.
 #
 # A Application 3scale com application_id (client OIDC) e secret pré-definidos NÃO é criada por um
 # CR Application (o operador não expõe esses campos). Aplique em paralelo:
@@ -33,7 +35,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
 type: Opaque
 stringData:
-  # Substitua pelo client_id e client_secret do cliente existente; host e realm conforme o ambiente.
+  # Substitua pelo client_id e client_secret do client do 3scale zync; host e realm conforme o ambiente.
   issuerEndpoint: "https://3scale-zync:jpuYKK4yELQlAn1PrpBFFVVmHk0y48Xl@rhbk-rhbk-gitops.apps.cluster-zrdcz.dynamic.redhatworkshops.io/realms/rhbk" # notsecret - test data
 ---
 apiVersion: v1
@@ -59,9 +61,12 @@ metadata:
 data:
   register.py: |
     #!/usr/bin/env python3
-    """Registra aplicação OIDC no 3scale com client_id e client_secret do Keycloak pré-definidos."""
+    """
+    Registra aplicação OIDC no 3scale com client_id e client_secret do Keycloak pré-definidos.
+    """
     import json
     import os
+    import secrets
     import sys
     import urllib.error
     import urllib.parse
@@ -77,33 +82,28 @@ data:
             die(f"Variável de ambiente obrigatória ausente ou vazia: {name}")
         return v
 
-    def unwrap(entry, *keys):
-        for k in keys:
-            if k in entry and isinstance(entry[k], dict):
-                return entry[k]
-        return entry
+    def api_request(admin_url, path, token, method="GET", payload=None):
+        """
+        Faz requisição HTTP para a API do 3scale e retorna (status_code, json_dict).
+        """
+        url = f"{admin_url}{path}"
+        headers = {"Accept": "application/json"}
+        data = None
 
-    def api_get(admin, path, token):
-        q = urllib.parse.urlencode({"access_token": token})
-        url = f"{admin}{path}?{q}"
-        req = urllib.request.Request(url, method="GET", headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=120) as r:
-            return json.loads(r.read().decode())
+        if method == "GET":
+            query = urllib.parse.urlencode({"access_token": token})
+            url = f"{url}?{query}"
+        elif method == "POST":
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+            form_data = payload.copy() if payload else []
+            form_data.append(("access_token", token))
+            data = urllib.parse.urlencode(form_data).encode()
 
-    def api_post_form(admin, path, token, pairs):
-        data = urllib.parse.urlencode(pairs + [("access_token", token)]).encode()
-        req = urllib.request.Request(
-            admin + path,
-            data=data,
-            method="POST",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json",
-            },
-        )
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=120) as r:
-                return r.status, json.loads(r.read().decode())
+            with urllib.request.urlopen(req, timeout=120) as response:
+                body = response.read().decode()
+                return response.status, (json.loads(body) if body else {})
         except urllib.error.HTTPError as e:
             raw = e.read().decode(errors="replace") if e.fp else ""
             try:
@@ -111,101 +111,150 @@ data:
             except json.JSONDecodeError:
                 parsed = raw
             return e.code, parsed
+        except Exception as e:
+            die(f"Erro de conexão com a API do 3scale: {e}")
 
-    admin = getenv("ADMIN_URL").rstrip("/")
-    token = getenv("ACCESS_TOKEN")
-    org_name = getenv("ACCOUNT_ORG_NAME")
-    product_sn = getenv("PRODUCT_SYSTEM_NAME")
-    plan_sn = getenv("PLAN_SYSTEM_NAME")
-    app_name = getenv("APP_NAME")
-    app_desc = os.environ.get("APP_DESCRIPTION")
-    client_id = getenv("CLIENT_ID")
-    client_secret = getenv("CLIENT_SECRET")
+    def get_app_client_secret(app):
+        """
+        Lê client_secret do JSON de application da API (OIDC/OAuth).
+        """
+        cs = app.get("client_secret")
+        if cs is not None and str(cs).strip() and str(cs).strip().upper() != "N/A":
+            return str(cs)
+        
+        keys = app.get("keys", [])
+        if isinstance(keys, list) and keys:
+            el = keys[0]
+            if isinstance(el, dict):
+                v = el.get("key") or el.get("value")
+                if v is not None and str(v).strip():
+                    return str(v)
+            elif isinstance(el, str) and el.strip():
+                return el
+        return None
 
-    accounts_resp = api_get(admin, "/admin/api/accounts.json", token)
-    account_id = None
-    for w in accounts_resp.get("accounts", []):
-        acc = unwrap(w, "account")
-        if acc.get("org_name") == org_name:
-            account_id = acc.get("id")
-            break
-    if account_id is None:
-        die(f"Conta de desenvolvedor com org_name={org_name!r} não encontrada no 3scale")
-
-    services_resp = api_get(admin, "/admin/api/services.json", token)
-    service_id = None
-    for w in services_resp.get("services", []):
-        svc = unwrap(w, "service")
-        if svc.get("system_name") == product_sn:
-            service_id = svc.get("id")
-            break
-    if service_id is None:
-        die(
-            f"Service (produto) com system_name={product_sn!r} não encontrado — "
-            f"sincronize o Product CR antes de executar este job"
-        )
-
-    plans_resp = api_get(admin, f"/admin/api/services/{service_id}/application_plans.json", token)
-    plan_rows = plans_resp.get("plans") or plans_resp.get("application_plans") or []
-    plan_id = None
-    plan_obj = None
-    for w in plan_rows:
-        p = unwrap(w, "plan", "application_plan")
-        if p.get("system_name") == plan_sn:
-            plan_id = p.get("id")
-            plan_obj = p
-            break
-    if plan_id is None:
-        die(
-            f"Plano de aplicação com system_name={plan_sn!r} não encontrado "
-            f"para o service id={service_id}"
-        )
-
-    psid = plan_obj.get("service_id") if plan_obj else None
-    if psid is not None and int(psid) != int(service_id):
-        die(
-            f"Inconsistência: plano id={plan_id} tem service_id={psid!r}, "
-            f"esperado id={service_id!r} (system_name do produto={product_sn!r})"
-        )
-
-    print(
-        f"Enviando POST para criar aplicação: account_id={account_id}, plan_id={plan_id} "
-        f"(produto system_name={product_sn!r}, service_id={service_id}; "
-        f"plano system_name={plan_sn!r})",
-        file=sys.stderr,
-    )
-
-    apps_resp = api_get(admin, f"/admin/api/accounts/{account_id}/applications.json", token)
-    for w in apps_resp.get("applications", []):
-        app = unwrap(w, "application")
-        aid = app.get("application_id")
-        if aid is not None and str(aid) == str(client_id):
+    def validate_client_secret_matches_app(app, expected_secret, allow_missing=False):
+        """
+        Compara o secret já associado à aplicação no 3scale com o secret esperado.
+        Se allow_missing e a API não expuser o secret, apenas avisa em stderr.
+        """
+        remote = get_app_client_secret(app)
+        if remote is None:
+            if allow_missing:
+                print(
+                    "Aviso: a API do 3scale não retornou client_secret nesta resposta; "
+                    "a validação contra o secret esperado foi ignorada.",
+                    file=sys.stderr,
+                )
+                return
+            die(
+                "Não foi possível obter client_secret da aplicação na resposta da API do 3scale; "
+                "não é possível validar."
+            )
+            
+        if not secrets.compare_digest(remote, str(expected_secret)):
             print(
-                f"OK: aplicação já existe (id={app.get('id')}, application_id={aid})",
+                "Erro: o client_secret registrado no 3scale para esta aplicação "
+                "é diferente do client_secret esperado (Keycloak / variável CLIENT_SECRET).",
                 file=sys.stderr,
             )
-            print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
-            sys.exit(0)
-        if app.get("name") == app_name:
-            print(
-                f"OK: já existe aplicação com nome {app_name!r} (id={app.get('id')})",
-                file=sys.stderr,
-            )
-            print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
+            die("Validação de client_secret falhou — os secrets não coincidem.", 2)
+
+    def main():
+        admin_url = getenv("ADMIN_URL").rstrip("/")
+        token = getenv("ACCESS_TOKEN")
+        org_name = getenv("ACCOUNT_ORG_NAME")
+        product_sn = getenv("PRODUCT_SYSTEM_NAME")
+        plan_sn = getenv("PLAN_SYSTEM_NAME")
+        app_name = getenv("APP_NAME")
+        app_desc = os.environ.get("APP_DESCRIPTION", "")
+        client_id = getenv("CLIENT_ID")
+        client_secret = getenv("CLIENT_SECRET")
+
+        # 1. Buscar a conta do desenvolvedor
+        status, accounts_resp = api_request(admin_url, "/admin/api/accounts.json", token)
+        if status != 200:
+            die(f"Erro ao buscar contas: HTTP {status} - {accounts_resp}")
+
+        account = next((item["account"] for item in accounts_resp.get("accounts", [])
+                        if item.get("account", {}).get("org_name") == org_name), None)
+        if not account:
+            die(f"Conta de desenvolvedor com org_name={org_name!r} não encontrada no 3scale")
+        account_id = account["id"]
+
+        # 2. Verificar se a aplicação já existe (evita chamadas desnecessárias)
+        status, apps_resp = api_request(admin_url, f"/admin/api/accounts/{account_id}/applications.json", token)
+        if status != 200:
+            die(f"Erro ao buscar aplicações: HTTP {status} - {apps_resp}")
+
+        for item in apps_resp.get("applications", []):
+            app = item.get("application", {})
+            aid = app.get("application_id")
+
+            is_same_id = (aid is not None and str(aid) == str(client_id))
+            is_same_name = (app.get("name") == app_name)
+
+            if is_same_id or is_same_name:
+                reason = f"application_id={aid}" if is_same_id else f"nome={app_name!r}"
+                print(f"OK: aplicação já existe ({reason}, id={app.get('id')})", file=sys.stderr)
+                validate_client_secret_matches_app(app, client_secret, allow_missing=False)
+                print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
+                sys.exit(0)
+
+        # 3. Buscar o serviço (produto)
+        status, services_resp = api_request(admin_url, "/admin/api/services.json", token)
+        if status != 200:
+            die(f"Erro ao buscar serviços: HTTP {status} - {services_resp}")
+
+        service = next((item["service"] for item in services_resp.get("services", [])
+                        if item.get("service", {}).get("system_name") == product_sn), None)
+        if not service:
+            die(f"Service (produto) com system_name={product_sn!r} não encontrado — sincronize o Product CR antes.")
+        service_id = service["id"]
+
+        # 4. Buscar o plano de aplicação
+        status, plans_resp = api_request(admin_url, f"/admin/api/services/{service_id}/application_plans.json", token)
+        if status != 200:
+            die(f"Erro ao buscar planos: HTTP {status} - {plans_resp}")
+
+        plan_rows = plans_resp.get("plans") or plans_resp.get("application_plans") or []
+        plan = next((item.get("plan") or item.get("application_plan") for item in plan_rows
+                     if (item.get("plan") or item.get("application_plan")).get("system_name") == plan_sn), None)
+
+        if not plan:
+            die(f"Plano de aplicação com system_name={plan_sn!r} não encontrado para o service id={service_id}")
+        plan_id = plan["id"]
+
+        psid = plan.get("service_id")
+        if psid is not None and int(psid) != int(service_id):
+            die(f"Inconsistência: plano id={plan_id} tem service_id={psid!r}, esperado {service_id!r}")
+
+        # 5. Criar a aplicação
+        print(
+            f"Enviando POST para criar aplicação: account_id={account_id}, plan_id={plan_id} "
+            f"(produto={product_sn!r}, plano={plan_sn!r})",
+            file=sys.stderr,
+        )
+
+        payload = [
+            ("plan_id", str(plan_id)),
+            ("name", app_name),
+            ("description", app_desc),
+            ("application_id", client_id),
+            ("application_key[]", client_secret),
+        ]
+
+        status, body = api_request(
+            admin_url, f"/admin/api/accounts/{account_id}/applications.json", token, method="POST", payload=payload
+        )
+
+        if status in (200, 201):
+            app = body.get("application", body) if isinstance(body, dict) else body
+            validate_client_secret_matches_app(app, client_secret, allow_missing=True)
+            print(json.dumps({"criado": True, "aplicacao": app}, indent=2, ensure_ascii=False))
             sys.exit(0)
 
-    pairs = [
-        ("plan_id", str(plan_id)),
-        ("name", app_name),
-        ("description", app_desc),
-        ("application_id", client_id),
-        ("application_key[]", client_secret),
-    ]
-    code, body = api_post_form(
-        admin, f"/admin/api/accounts/{account_id}/applications.json", token, pairs
-    )
-    if code in (200, 201):
-        app = unwrap(body, "application") if isinstance(body, dict) else body
-        print(json.dumps({"criado": True, "aplicacao": app}, indent=2, ensure_ascii=False))
-        sys.exit(0)
-    die(f"Falha ao criar aplicação — HTTP {code}: {body!r}", 2)
+        die(f"Falha ao criar aplicação — HTTP {status}: {body!r}", 2)
+
+    if __name__ == "__main__":
+        main()
