@@ -17,7 +17,7 @@
 #   - Secret myapi-oidc-existing-app-client com clientId + clientSecret (Keycloak existente).
 #
 # O Job é idempotente: se já existir aplicação com o mesmo application_id ou nome, valida se o
-# client_secret no 3scale coincide com CLIENT_SECRET (Keycloak); se não coincidir, falha com erro.
+# client_secret no 3scale coincide com CLIENT_SECRET (Keycloak no repositório GitOps); se não coincidir, falha com erro.
 # Após create, compara quando a API expõe o secret; caso contrário emite aviso e segue.
 #
 # A Application 3scale com application_id (client OIDC) e secret pré-definidos NÃO é criada por um
@@ -155,10 +155,10 @@ data:
         if not secrets.compare_digest(remote, str(expected_secret)):
             print(
                 "Erro: o client_secret registrado no 3scale para esta aplicação "
-                "é diferente do client_secret esperado (Keycloak / variável CLIENT_SECRET).",
+                "é diferente do client_secret esperado (GitOps / variável CLIENT_SECRET).",
                 file=sys.stderr,
             )
-            print(f"Secret esperado (Keycloak): {expected_secret!r}", file=sys.stderr)
+            print(f"Secret esperado (GitOps): {expected_secret!r}", file=sys.stderr)
             print(f"Secret remoto (3scale): {remote!r}", file=sys.stderr)
             print(f"JSON da aplicação retornado pela API:\n{json.dumps(app, indent=2, ensure_ascii=False)}", file=sys.stderr)
             die("Validação de client_secret falhou — os secrets não coincidem.", 2)
