@@ -54,7 +54,7 @@ stringData:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: myapi-oidc-register-application-script
+  name: register-application-script
   namespace: 3scale-gitops
 data:
   register.py: |

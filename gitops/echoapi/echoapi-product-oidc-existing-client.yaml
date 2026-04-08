@@ -102,16 +102,6 @@ spec:
               set -euo pipefail
               python3 /scripts/register.py
           env:
-            - name: ADMIN_URL
-              valueFrom:
-                secretKeyRef:
-                  name: myapi-oidc-3scale-management
-                  key: adminURL
-            - name: ACCESS_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: myapi-oidc-3scale-management
-                  key: token
             - name: ACCOUNT_ORG_NAME
               valueFrom:
                 secretKeyRef:
@@ -147,6 +137,16 @@ spec:
                 secretKeyRef:
                   name: myapi-oidc-existing-app-client
                   key: clientSecret
+            - name: ADMIN_URL
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-3scale-management
+                  key: adminURL
+            - name: ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: myapi-oidc-3scale-management
+                  key: token
           volumeMounts:
             - name: scripts
               mountPath: /scripts
@@ -154,5 +154,5 @@ spec:
       volumes:
         - name: scripts
           configMap:
-            name: myapi-oidc-register-application-script
+            name: register-application-script
             defaultMode: 0444

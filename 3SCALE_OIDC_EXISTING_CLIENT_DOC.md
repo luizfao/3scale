@@ -58,9 +58,9 @@ stringData:
 
 ---
 
-## 3. O ConfigMap do Script de Registro (`myapi-oidc-register-application-script`)
+## 3. O ConfigMap do Script de Registro (`register-application-script`)
 
-Para manter o código limpo e reutilizável, o script Python que faz a chamada à API do 3scale foi extraído para o ConfigMap `myapi-oidc-register-application-script`.
+Para manter o código limpo e reutilizável, o script Python que faz a chamada à API do 3scale foi extraído para o ConfigMap `register-application-script`.
 
 **De forma resumida, este script:**
 1. Lê as variáveis de ambiente fornecidas pelo Job (credenciais da API, dados do produto, plano, conta e credenciais do Keycloak).
