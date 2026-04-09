@@ -73,7 +73,7 @@ metadata:
 type: Opaque
 stringData:
   clientId: "a2e33131"
-  clientSecret: "664fadd40b4dda7a737291da690abb8b" # notsecret - test data
+  clientSecret: "c6aba0a09bfabf1068353ef2c65f9023" # notsecret - test data
   accountOrgName: "Echo API Org"
   productSystemName: "myapi_oidc_existing"
   planSystemName: "basic-myapi-oidc"
