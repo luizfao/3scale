@@ -185,26 +185,7 @@ data:
             die(f"Conta de desenvolvedor com org_name={org_name!r} não encontrada no 3scale")
         account_id = account["id"]
 
-        # 2. Verificar se a aplicação já existe (evita chamadas desnecessárias)
-        status, apps_resp = api_request(admin_url, f"/admin/api/accounts/{account_id}/applications.json", token)
-        if status != 200:
-            die(f"Erro ao buscar aplicações: HTTP {status} - {apps_resp}")
-
-        for item in apps_resp.get("applications", []):
-            app = item.get("application", {})
-            aid = app.get("application_id")
-
-            is_same_id = (aid is not None and str(aid) == str(client_id))
-            is_same_name = (app.get("name") == app_name)
-
-            if is_same_id or is_same_name:
-                reason = f"application_id={aid}" if is_same_id else f"nome={app_name!r}"
-                print(f"OK: aplicação já existe ({reason}, id={app.get('id')})", file=sys.stderr)
-                validate_client_secret_matches_app(app, client_secret, allow_missing=False)
-                print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
-                sys.exit(0)
-
-        # 3. Buscar o serviço (produto)
+        # 2. Buscar o serviço (produto)
         status, services_resp = api_request(admin_url, "/admin/api/services.json", token)
         if status != 200:
             die(f"Erro ao buscar serviços: HTTP {status} - {services_resp}")
@@ -214,6 +195,28 @@ data:
         if not service:
             die(f"Service (produto) com system_name={product_sn!r} não encontrado — sincronize o Product CR antes.")
         service_id = service["id"]
+
+        # 3. Verificar se a aplicação já existe
+        status, apps_resp = api_request(admin_url, f"/admin/api/accounts/{account_id}/applications.json", token)
+        if status != 200:
+            die(f"Erro ao buscar aplicações: HTTP {status} - {apps_resp}")
+
+        for item in apps_resp.get("applications", []):
+            app = item.get("application", {})
+            aid = app.get("application_id")
+            app_service_id = app.get("service_id")
+
+            is_same_id = (aid is not None and str(aid) == str(client_id))
+            is_same_name = (app.get("name") == app_name)
+            is_same_product = (app_service_id is not None and str(app_service_id) == str(service_id))
+
+            # Verifica se o application_id (client_id) ou o appName e o serviço (produto) systemName são os mesmos
+            if is_same_id or (is_same_name and is_same_product):
+                reason = f"application_id={aid}" if is_same_id else f"nome={app_name!r} no mesmo produto"
+                print(f"OK: aplicação já existe ({reason}, id={app.get('id')})", file=sys.stderr)
+                validate_client_secret_matches_app(app, client_secret, allow_missing=False)
+                print(json.dumps({"ja_existia": True, "aplicacao": app}, indent=2, ensure_ascii=False))
+                sys.exit(0)
 
         # 4. Buscar o plano de aplicação
         status, plans_resp = api_request(admin_url, f"/admin/api/services/{service_id}/application_plans.json", token)
